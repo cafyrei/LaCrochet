@@ -15,14 +15,17 @@ import json
 import logging
 import os
 import re
+import uuid
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.orderModel import Order
-from routes.orderRoutes import _centavos, _payrex, mark_paid
+from routes.orderRoutes import _centavos, _frontend_url, _payrex, mark_paid
 
 router = APIRouter()
 log = logging.getLogger("lacrochet.payments")
@@ -122,3 +125,33 @@ async def payrex_webhook(request: Request, db: Session = Depends(get_db)):
         log.info("Order %s marked paid by PayRex webhook (%s).", order.order_number, intent_id)
     db.commit()
     return {"received": True}
+
+
+# ---------------------------------------------------------------------
+# Coming back from the PayRex page (only used when PUBLIC_API_URL is set)
+# ---------------------------------------------------------------------
+def _order_link(order: str, token: str) -> str:
+    """Only forward real-looking order links, and only to our own shop."""
+    try:
+        uuid.UUID(token)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    if not ORDER_NUMBER.fullmatch(order):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    return urlencode({"order": order, "token": token})
+
+
+@router.get("/payments/return/success")
+def back_from_payment(order: str, token: str):
+    """PayRex sends the customer here after paying; pass them on to the shop."""
+    return RedirectResponse(
+        f"{_frontend_url()}/order-confirmation?{_order_link(order, token)}", status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.get("/payments/return/cancel")
+def back_from_cancel(order: str, token: str):
+    """PayRex sends the customer here if they press back/cancel."""
+    return RedirectResponse(
+        f"{_frontend_url()}/checkout?payment=cancelled&{_order_link(order, token)}", status.HTTP_303_SEE_OTHER
+    )

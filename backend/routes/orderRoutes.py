@@ -1,6 +1,8 @@
+import logging
 import os
 import uuid
 from decimal import ROUND_HALF_UP, Decimal
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from payrex import Client as PayrexClient
@@ -15,6 +17,7 @@ from routes.cartRoutes import clear_cart
 from schemas.orderSchemas import MyOrderOut, OrderCreate, OrderCreated, OrderOut
 
 router = APIRouter()
+log = logging.getLogger("uvicorn.error")  # shows up in the backend terminal
 
 # Keep in sync with DELIVERY_FEE in CheckoutPage.jsx and Cart.jsx.
 DELIVERY_FEE = Decimal("90.00")
@@ -26,9 +29,45 @@ def _frontend_url() -> str:
     return os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 
 
+def _public_api_url() -> str:
+    """Your backend's internet address (the ngrok one while testing). Optional."""
+    return os.getenv("PUBLIC_API_URL", "").rstrip("/")
+
+
+def _return_urls(order: "Order") -> tuple[str, str]:
+    """Where PayRex sends the customer after paying, and after cancelling.
+
+    PayRex refuses addresses on your own computer (localhost). So while testing,
+    set PUBLIC_API_URL to your ngrok address: PayRex sends the customer to the
+    backend through ngrok, and the backend forwards them to the shop on localhost.
+    Once the shop is online (FRONTEND_URL is a real address), leave it unset.
+    """
+    link = urlencode({"order": order.order_number, "token": str(order.access_token)})
+    public_api = _public_api_url()
+    if public_api:
+        return (
+            f"{public_api}/api/payments/return/success?{link}",
+            f"{public_api}/api/payments/return/cancel?{link}",
+        )
+    return (
+        f"{_frontend_url()}/order-confirmation?{link}",
+        f"{_frontend_url()}/checkout?payment=cancelled&{link}",
+    )
+
+
 def _payrex():
     secret_key = os.getenv("PAYREX_API_SECRET")
     return PayrexClient(secret_key) if secret_key else None
+
+
+def _payrex_reason(exc: Exception) -> str:
+    """Turn a PayRex error into readable text, e.g. "payment_methods: maya is not enabled"."""
+    errors = getattr(exc, "errors", None) or []
+    parts = [
+        f"{error.parameter}: {error.detail}" if error.parameter else (error.detail or error.code or "")
+        for error in errors
+    ]
+    return "; ".join(part for part in parts if part) or repr(exc)
 
 
 def _centavos(amount: Decimal) -> int:
@@ -177,7 +216,7 @@ def create_order(
                 "Online payment isn't set up yet (PAYREX_API_SECRET is missing).",
             )
 
-        link = f"order={order.order_number}&token={order.access_token}"
+        success_url, cancel_url = _return_urls(order)
         line_items = [
             {"name": item.product_name, "amount": _centavos(Decimal(item.unit_price)),
              "quantity": item.quantity}
@@ -192,8 +231,8 @@ def create_order(
             session = payrex.checkout_sessions.create(
                 {
                     "currency": "PHP",
-                    "success_url": f"{_frontend_url()}/order-confirmation?{link}",
-                    "cancel_url": f"{_frontend_url()}/checkout?payment=cancelled&{link}",
+                    "success_url": success_url,
+                    "cancel_url": cancel_url,
                     "payment_methods": PAYREX_METHODS,
                     "line_items": line_items,
                     "description": f"La Crochet order {order.order_number}",
@@ -204,10 +243,19 @@ def create_order(
             )
         except Exception as exc:
             db.rollback()
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                "PayRex could not start the payment. Please try again or choose cash on delivery.",
-            ) from exc
+            reason = _payrex_reason(exc)
+            log.error("PayRex refused to create the payment page: %s", reason)
+            message = "PayRex could not start the payment. Please try again or choose cash on delivery."
+            # With test keys, show PayRex's reason on the page too, to make fixing it easier.
+            # Never with live keys: customers shouldn't see technical details.
+            if os.getenv("PAYREX_API_SECRET", "").startswith("sk_test_"):
+                message += f" (PayRex said: {reason})"
+                if "403" in reason and "localhost" in success_url:
+                    message += (
+                        " Tip: PayRex blocks localhost addresses. Put PUBLIC_API_URL=<your ngrok address>"
+                        " in backend/.env and restart the backend."
+                    )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, message) from exc
 
         if not getattr(session, "url", None):
             db.rollback()
