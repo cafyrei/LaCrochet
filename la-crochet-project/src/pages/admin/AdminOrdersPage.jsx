@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router";
-import { getAllOrders, updateOrder } from "../../api/admin";
+import { bookRider, cancelRider, getAllOrders, refreshRider, updateOrder } from "../../api/admin";
 import AdminPageHeader, { LoadError } from "../../components/admin/AdminPageHeader";
 import { CloseIcon, SearchIcon } from "../../components/Icons";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { formatDate, formatPrice } from "../../utils/format";
 import { orderStatus, paymentText } from "../../utils/orderStatus";
+import { riderActive, riderStatusText } from "../../utils/riderStatus";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -50,6 +52,7 @@ const itemSummary = (order) => {
 // Saving a change to one order (status, payment) with its own busy/error state.
 function useOrderChange(order, onUpdated) {
   const { token } = useAuth();
+  const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,7 +60,13 @@ function useOrderChange(order, onUpdated) {
     setBusy(true);
     setError("");
     try {
-      onUpdated(await updateOrder(token, order.order_number, changes));
+      const updated = await updateOrder(token, order.order_number, changes);
+      onUpdated(updated);
+      toast(
+        changes.order_status
+          ? `${order.order_number} is now "${orderStatus(updated.order_status).label}"`
+          : `Saved ${order.order_number}`
+      );
       return true;
     } catch (err) {
       setError(err.message);
@@ -240,10 +249,13 @@ function OrderRow({ order, selected, onOpen, onUpdated }) {
         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${status.className}`}>
           {status.label}
         </span>
-        <p className={`mt-1 text-xs ${order.payment_status === "paid" ? "text-[#2f5d33]" : "text-muted"}`}>
+        <p className={`mt-1 text-xs ${order.payment_status === "paid" ? "text-success" : "text-muted"}`}>
           {order.shipping_method === "pickup" ? "Pickup" : "Delivery"},{" "}
           {order.payment_status === "paid" ? "paid" : paymentText(order).toLowerCase()}
         </p>
+        {order.lalamove_status && (
+          <p className="text-xs text-muted">Lalamove: {riderStatusText(order.lalamove_status).toLowerCase()}</p>
+        )}
       </div>
 
       <div className="mt-2 md:mt-0 md:text-right">
@@ -294,7 +306,7 @@ function OrderPanel({ order, onClose, onUpdated }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex justify-end">
-      <div className="absolute inset-0 bg-ink/30" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-shade/30" onClick={onClose} aria-hidden="true" />
       <aside
         role="dialog"
         aria-modal="true"
@@ -374,11 +386,23 @@ function OrderPanel({ order, onClose, onUpdated }) {
               {order.shipping_method === "delivery" ? "Deliver to" : "Pickup"}
             </h3>
             <p className="mt-2">{order.shipping_method === "delivery" ? address : "The customer collects it at the shop."}</p>
+            {order.ship_lat != null && order.ship_lng != null && (
+              <a
+                href={`https://www.google.com/maps?q=${order.ship_lat},${order.ship_lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="link mt-1 inline-block text-xs"
+              >
+                See their map pin
+              </a>
+            )}
           </section>
+
+          {order.shipping_method === "delivery" && <RiderSection order={order} onUpdated={onUpdated} />}
 
           <section>
             <h3 className="font-sans text-xs font-bold text-muted">Payment</h3>
-            <p className={`mt-2 ${order.payment_status === "paid" ? "font-semibold text-[#2f5d33]" : ""}`}>
+            <p className={`mt-2 ${order.payment_status === "paid" ? "font-semibold text-success" : ""}`}>
               {order.payment_status === "paid"
                 ? order.payment_method === "online"
                   ? "Paid online"
@@ -434,7 +458,7 @@ function OrderPanel({ order, onClose, onUpdated }) {
                     type="button"
                     disabled={busy}
                     onClick={async () => (await change({ order_status: "cancelled" })) && setConfirmingCancel(false)}
-                    className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-white hover:bg-berry-dark"
+                    className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-on-berry hover:bg-berry-dark"
                   >
                     Yes, cancel it
                   </button>
@@ -466,5 +490,133 @@ function OrderPanel({ order, onClose, onUpdated }) {
         </footer>
       </aside>
     </div>
+  );
+}
+
+// Booking and following the Lalamove rider for one delivery order.
+function RiderSection({ order, onUpdated }) {
+  const { token } = useAuth();
+  const [rider, setRider] = useState(null);
+  const [busy, setBusy] = useState(""); // "", "book", "refresh" or "cancel"
+  const [error, setError] = useState("");
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const booked = Boolean(order.lalamove_order_id) && riderActive(order.lalamove_status);
+
+  async function run(kind, action) {
+    setBusy(kind);
+    setError("");
+    try {
+      const result = await action(token, order.order_number);
+      onUpdated(result.order);
+      setRider(result.rider);
+      setConfirmingCancel(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // Get fresh news from Lalamove whenever this order is opened.
+  useEffect(() => {
+    setRider(null);
+    setError("");
+    if (order.lalamove_order_id && riderActive(order.lalamove_status)) run("refresh", refreshRider);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.order_number]);
+
+  return (
+    <section>
+      <h3 className="font-sans text-xs font-bold text-muted">Lalamove rider</h3>
+
+      {booked ? (
+        <div className="mt-2 space-y-2 rounded-xl border border-line p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold">{riderStatusText(order.lalamove_status)}</p>
+            <button
+              type="button"
+              onClick={() => run("refresh", refreshRider)}
+              disabled={busy !== ""}
+              className="cursor-pointer text-xs font-semibold text-berry hover:underline disabled:opacity-50"
+            >
+              {busy === "refresh" ? "Checking…" : "Refresh"}
+            </button>
+          </div>
+          {rider?.name && (
+            <p className="text-muted">
+              {rider.name}
+              {rider.plate_number && `, plate ${rider.plate_number}`}
+              {rider.phone && (
+                <>
+                  {", "}
+                  <a href={`tel:${rider.phone}`} className="link font-normal">
+                    {rider.phone}
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+          {order.lalamove_fee != null && (
+            <p className="text-xs text-muted">
+              Lalamove charges {formatPrice(order.lalamove_fee)} (customer paid {formatPrice(order.shipping_fee)})
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {order.lalamove_share_link && (
+              <a href={order.lalamove_share_link} target="_blank" rel="noreferrer" className="btn-secondary btn-small">
+                Track
+              </a>
+            )}
+            {!confirmingCancel ? (
+              <button type="button" onClick={() => setConfirmingCancel(true)} disabled={busy !== ""} className="btn-quiet btn-small text-berry">
+                Cancel rider
+              </button>
+            ) : (
+              <span className="flex items-center gap-2 text-xs">
+                Cancel this rider?
+                <button
+                  type="button"
+                  onClick={() => run("cancel", cancelRider)}
+                  disabled={busy !== ""}
+                  className="cursor-pointer rounded-full bg-berry px-3 py-1.5 font-bold text-on-berry hover:bg-berry-dark"
+                >
+                  {busy === "cancel" ? "Cancelling…" : "Yes, cancel"}
+                </button>
+                <button type="button" onClick={() => setConfirmingCancel(false)} className="cursor-pointer rounded-full px-3 py-1.5 font-bold hover:bg-sand">
+                  Keep
+                </button>
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 space-y-2">
+          {order.lalamove_status && (
+            <p className="text-muted">
+              {riderStatusText(order.lalamove_status)}
+              {order.lalamove_status === "COMPLETED" && order.lalamove_fee != null && ` (Lalamove charged ${formatPrice(order.lalamove_fee)})`}
+            </p>
+          )}
+          {order.lalamove_status === "COMPLETED" ? null : order.ship_lat == null ? (
+            <p className="text-muted">This order has no map pin (it was placed before Lalamove was connected). Book it in the Lalamove app.</p>
+          ) : order.order_status === "processing" ? (
+            <>
+              <button type="button" onClick={() => run("book", bookRider)} disabled={busy !== ""} className="btn-primary btn-small">
+                {busy === "book" ? "Booking…" : order.lalamove_status ? "Book another rider" : "Book Lalamove rider"}
+              </button>
+              <p className="text-xs text-muted">Book when the parcel is packed. The customer paid {formatPrice(order.shipping_fee)} for delivery.</p>
+            </>
+          ) : order.order_status === "pending" ? (
+            <p className="text-muted">You can book a rider once you start preparing this order.</p>
+          ) : null}
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-berry">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

@@ -1,22 +1,27 @@
 """The shop owner's tools. Every route here needs an account with role = admin."""
 
+import logging
 import re
 from datetime import timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
+import lalamove_client as lalamove
 from auth import get_admin_user
 from database import get_db
 from models.categoryModel import Category
 from models.orderModel import Order
 from models.productModel import Product
 from models.userModel import User
+from routes.contactRoutes import count_new_messages
 from routes.orderRoutes import _cancel_and_restock
 from schemas.adminSchemas import (
     AdminCategoryOut,
     AdminOrderOut,
+    AdminOrderWithRider,
     AdminProductOut,
     CategoryIn,
     CategoryOrder,
@@ -27,6 +32,7 @@ from schemas.adminSchemas import (
 )
 
 router = APIRouter()
+log = logging.getLogger("uvicorn.error")
 
 LOW_STOCK = 5          # this many or fewer left = "running low"
 SHOP_TIMEZONE = "Asia/Manila"
@@ -103,6 +109,123 @@ def update_order(
     db.commit()
     db.refresh(order)
     return order
+
+
+# ---------------------------------------------------------------------
+# Lalamove riders
+# ---------------------------------------------------------------------
+def _locked_order(db: Session, order_number: str) -> Order:
+    order = db.query(Order).filter(Order.order_number == order_number).with_for_update().first()
+    if order is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    return order
+
+
+def _lalamove_failed(exc: "lalamove.LalamoveError") -> HTTPException:
+    log.warning("Lalamove: %s (%s)", exc, exc.code)
+    return HTTPException(status.HTTP_409_CONFLICT if exc.code else status.HTTP_502_BAD_GATEWAY, str(exc))
+
+
+def _apply_lalamove_status(order: Order, info: dict) -> None:
+    """Copy Lalamove's latest news onto the order, and move the order along with the rider."""
+    order.lalamove_status = info.get("status") or order.lalamove_status
+    order.lalamove_share_link = info.get("share_link") or order.lalamove_share_link
+    order.lalamove_driver_id = info.get("driver_id") or order.lalamove_driver_id
+
+    if order.lalamove_status == "PICKED_UP" and order.order_status == "processing":
+        order.order_status = "shipped"     # the rider has the parcel: "On the way"
+    elif order.lalamove_status == "COMPLETED" and order.order_status in ("processing", "shipped"):
+        order.order_status = "completed"   # delivered (cash on delivery: mark it paid when you have the cash)
+
+
+@router.post("/orders/{order_number}/lalamove", response_model=AdminOrderWithRider)
+def book_rider(order_number: str, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """The "Book Lalamove rider" button."""
+    if not lalamove.is_configured():
+        raise HTTPException(status.HTTP_409_CONFLICT, "Lalamove isn't set up yet. Add the Lalamove keys and SHOP_LAT/SHOP_LNG to backend/.env.")
+
+    order = _locked_order(db, order_number)  # locked, so a double-click can't book two riders
+    if order.shipping_method != "delivery":
+        raise HTTPException(status.HTTP_409_CONFLICT, "This order is for pickup, not delivery.")
+    if order.order_status != "processing":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Book a rider once the order is being prepared (and paid, if paying online).")
+    if order.lalamove_order_id and order.lalamove_status not in lalamove.FINISHED:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A rider is already booked for this order.")
+    if order.ship_lat is None or order.ship_lng is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This order has no map pin (it was placed before Lalamove was connected). Book it in the Lalamove app.",
+        )
+
+    address = ", ".join(
+        part for part in (order.ship_street, order.ship_barangay, order.ship_city,
+                          f"{order.ship_province or ''} {order.ship_postal_code or ''}".strip()) if part
+    )
+    try:
+        booking = lalamove.book(
+            lat=order.ship_lat, lng=order.ship_lng, address=address,
+            customer_name=order.customer_name, customer_phone=order.phone, order_number=order.order_number,
+        )
+    except lalamove.LalamoveError as exc:
+        db.rollback()
+        raise _lalamove_failed(exc)
+
+    order.lalamove_order_id = booking["order_id"]
+    order.lalamove_fee = booking["fee"]
+    order.lalamove_driver_id = None
+    _apply_lalamove_status(order, booking)
+
+    # Prices can move between checkout and booking: leave a note if you paid more than the customer did.
+    charged = Decimal(order.shipping_fee or 0)
+    if booking["fee"] > charged:
+        note = f"Lalamove charged ₱{booking['fee']:,.2f} for the rider; the customer paid ₱{charged:,.2f} for delivery."
+        order.notes = f"{order.notes}\n{note}" if order.notes else note
+
+    db.commit()
+    db.refresh(order)
+    return {"order": order, "rider": None}
+
+
+@router.post("/orders/{order_number}/lalamove/refresh", response_model=AdminOrderWithRider)
+def refresh_rider(order_number: str, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Ask Lalamove where the rider is now (the panel does this when you open an order)."""
+    order = _locked_order(db, order_number)
+    if not order.lalamove_order_id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "No rider has been booked for this order.")
+    try:
+        info = lalamove.get_order(order.lalamove_order_id)
+    except lalamove.LalamoveError as exc:
+        db.rollback()
+        raise _lalamove_failed(exc)
+
+    _apply_lalamove_status(order, info)
+    rider = None
+    if order.lalamove_driver_id and order.lalamove_status not in lalamove.FINISHED:
+        rider = lalamove.get_driver(order.lalamove_order_id, order.lalamove_driver_id)
+
+    db.commit()
+    db.refresh(order)
+    return {"order": order, "rider": rider}
+
+
+@router.delete("/orders/{order_number}/lalamove", response_model=AdminOrderWithRider)
+def cancel_rider(order_number: str, _: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Cancel the booked rider (Lalamove allows this until 5 minutes after a rider is assigned)."""
+    order = _locked_order(db, order_number)
+    if not order.lalamove_order_id or order.lalamove_status in lalamove.FINISHED:
+        raise HTTPException(status.HTTP_409_CONFLICT, "There's no active rider booking to cancel.")
+    try:
+        lalamove.cancel(order.lalamove_order_id)
+    except lalamove.LalamoveError as exc:
+        db.rollback()
+        raise _lalamove_failed(exc)
+
+    order.lalamove_status = "CANCELED"
+    if order.order_status == "shipped":
+        order.order_status = "processing"   # back to "Preparing" so you can book again
+    db.commit()
+    db.refresh(order)
+    return {"order": order, "rider": None}
 
 
 # ---------------------------------------------------------------------
@@ -216,11 +339,12 @@ def _to_do_counts(db: Session) -> dict:
 
 @router.get("/counts")
 def sidebar_counts(_: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    """The little numbers next to Orders and Products in the side menu."""
+    """The little numbers next to Orders, Products and Messages in the side menu."""
     counts = _to_do_counts(db)
     return {
         "orders": counts["to_prepare"] + counts["preparing"],
         "low_stock": counts["low_stock"],
+        "messages": count_new_messages(db),
     }
 
 

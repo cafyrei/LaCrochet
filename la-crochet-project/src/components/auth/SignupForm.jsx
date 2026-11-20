@@ -68,7 +68,7 @@ export default function SignupForm({
       await onSignup(account);
       // Log them in straight away so they don't have to type it all again.
       try {
-        await login(account.email, account.password, true);
+        await login(account.email, account.password, true, { quiet: true });
       } catch {
         // Account was created; they can still sign in by hand.
       }

@@ -97,6 +97,8 @@ class AddressOut(BaseModel):
     province: str
     postal_code: str
     country: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class UserProfile(BaseModel):

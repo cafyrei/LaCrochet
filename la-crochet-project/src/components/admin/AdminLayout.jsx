@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { getCounts } from "../../api/admin";
 import { useAuth } from "../../context/AuthContext";
 import LoginRequired from "../auth/LoginRequired";
+import ThemeToggle from "../ThemeToggle";
 import {
+  ChatIcon,
   CloseIcon,
   FolderIcon,
   HomeIcon,
@@ -21,6 +23,7 @@ const SECTIONS = [
   { to: "/admin/orders", label: "Orders", icon: ReceiptIcon, count: "orders", countLabel: "to handle" },
   { to: "/admin/products", label: "Products", icon: TagIcon, count: "low_stock", countLabel: "running low" },
   { to: "/admin/categories", label: "Categories", icon: FolderIcon },
+  { to: "/admin/messages", label: "Messages", icon: ChatIcon, count: "messages", countLabel: "new" },
   { to: "/admin/newsletter", label: "Newsletter", icon: MailIcon },
 ];
 
@@ -30,7 +33,6 @@ export default function AdminLayout() {
   const { user, token, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   const location = useLocation();
-  const navigate = useNavigate();
   const [counts, setCounts] = useState({});
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -56,15 +58,13 @@ export default function AdminLayout() {
 
   if (!isAdmin) return <AdminGate loggedIn={Boolean(user)} />;
 
-  function handleLogout() {
-    logout();
-    navigate("/");
-  }
+  // Logging out of the back office goes back to the shop's home page (see AuthContext).
+  const handleLogout = () => logout();
 
   return (
     <div className="min-h-screen bg-cream lg:flex">
       {/* Phone and tablet: a top bar with a menu button */}
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-ink px-4 py-3 text-cream lg:hidden">
+      <header className="night sticky top-0 z-30 flex items-center justify-between bg-ink px-4 py-3 text-cream lg:hidden">
         <Brand />
         <button
           type="button"
@@ -79,12 +79,12 @@ export default function AdminLayout() {
       </header>
 
       {menuOpen && (
-        <div className="fixed inset-0 z-40 bg-ink/50 lg:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+        <div className="fixed inset-0 z-40 bg-shade/50 lg:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />
       )}
 
       <aside
         id="admin-menu"
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-ink text-cream transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:shrink-0 lg:translate-x-0 ${
+        className={`night fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-ink text-cream transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           menuOpen ? "visible translate-x-0" : "invisible -translate-x-full lg:visible"
         }`}
       >
@@ -140,6 +140,10 @@ export default function AdminLayout() {
             <StoreIcon className="h-5 w-5" />
             View the shop
           </Link>
+          <ThemeToggle
+            withLabel
+            className="flex w-full cursor-pointer items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-cream/80 hover:bg-white/10 hover:text-cream"
+          />
           <button
             type="button"
             onClick={handleLogout}
@@ -153,7 +157,8 @@ export default function AdminLayout() {
       </aside>
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
-        <div className="mx-auto max-w-6xl">
+        {/* key: each back-office page fades in when you switch sections */}
+        <div key={location.pathname} className="page-enter mx-auto max-w-6xl">
           <Outlet context={{ refreshCounts }} />
         </div>
       </main>

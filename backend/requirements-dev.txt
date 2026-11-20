@@ -1,0 +1,5 @@
+# Extra tools for running the tests (not needed to run the shop).
+# Install with:  python -m pip install -r requirements-dev.txt
+-r requirements.txt
+pytest>=8
+httpx

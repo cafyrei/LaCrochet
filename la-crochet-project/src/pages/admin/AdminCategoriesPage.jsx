@@ -10,9 +10,11 @@ import {
 import AdminPageHeader, { LoadError } from "../../components/admin/AdminPageHeader";
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../../components/Icons";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 
 export default function AdminCategoriesPage() {
   const { token } = useAuth();
+  const { toast } = useToast();
   const [categories, setCategories] = useState(null); // null = loading
   const [error, setError] = useState("");
   const [orderError, setOrderError] = useState("");
@@ -43,6 +45,7 @@ export default function AdminCategoriesPage() {
   }
 
   function replace(updated) {
+    toast(`Saved "${updated.name}"`);
     setCategories((current) =>
       current.map((category) => (category.category_id === updated.category_id ? updated : category))
     );
@@ -76,6 +79,7 @@ export default function AdminCategoriesPage() {
               onSubmit={async (values) => {
                 const created = await createCategory(token, values);
                 setCategories((current) => [...current, created]);
+                toast(`Added the "${created.name}" category`);
                 setAdding(false);
               }}
             />
@@ -102,9 +106,10 @@ export default function AdminCategoriesPage() {
                   onMoveUp={() => move(index, -1)}
                   onMoveDown={() => move(index, 1)}
                   onSaved={replace}
-                  onDeleted={() =>
-                    setCategories((current) => current.filter((item) => item.category_id !== category.category_id))
-                  }
+                  onDeleted={() => {
+                    setCategories((current) => current.filter((item) => item.category_id !== category.category_id));
+                    toast({ message: `Deleted "${category.name}"`, tone: "info" });
+                  }}
                 />
               ))}
             </ul>
@@ -205,7 +210,7 @@ function CategoryRow({ category, isFirst, isLast, onMoveUp, onMoveDown, onSaved,
               type="button"
               disabled={busy}
               onClick={remove}
-              className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-white hover:bg-berry-dark"
+              className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-on-berry hover:bg-berry-dark"
             >
               Yes, delete it
             </button>

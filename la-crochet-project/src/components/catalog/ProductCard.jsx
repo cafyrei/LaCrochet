@@ -66,7 +66,7 @@ export default function ProductCard({ product, addToCart }) {
           onClick={handleAdd}
           disabled={soldOut || status.state === "adding"}
           aria-label={soldOut ? `${product.name} is sold out` : `Add ${product.name} to cart`}
-          className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-card text-ink transition-colors hover:border-berry hover:bg-berry hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-card disabled:hover:text-ink"
+          className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-card text-ink transition-colors hover:border-berry hover:bg-berry hover:text-on-berry disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:bg-card disabled:hover:text-ink"
         >
           {status.state === "added" ? <CheckIcon /> : <BagIcon />}
         </button>

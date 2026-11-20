@@ -3,10 +3,12 @@ import { Link, useSearchParams } from "react-router";
 import { getOrder, PENDING_ORDER_KEY } from "../api/orders";
 import { CheckIcon, CloseIcon } from "../components/Icons";
 import PageLayout from "../components/PageLayout";
+import CheckoutSteps from "../components/checkout/CheckoutSteps";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { formatDate, formatPrice } from "../utils/format";
 import { orderStatus, paymentText } from "../utils/orderStatus";
+import { riderActive, riderStatusText } from "../utils/riderStatus";
 
 export default function OrderConfirmationPage() {
   const [searchParams] = useSearchParams();
@@ -77,12 +79,18 @@ export default function OrderConfirmationPage() {
 
   return (
     <PageLayout>
+      {justPlaced && !cancelled && (
+        <div className="mb-8 flex justify-center">
+          <CheckoutSteps current="done" />
+        </div>
+      )}
+
       {/* ---- What happened ---- */}
       <section className="text-center">
         <span
           aria-hidden="true"
-          className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
-            cancelled ? "bg-sand text-muted" : "bg-berry text-white"
+          className={`${justPlaced && !cancelled ? "success-pop " : ""}mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
+            cancelled ? "bg-sand text-muted" : "bg-berry text-on-berry"
           }`}
         >
           {cancelled ? <CloseIcon /> : <CheckIcon className="h-7 w-7" />}
@@ -157,6 +165,18 @@ export default function OrderConfirmationPage() {
             <dd className="mt-0.5 text-muted">{paymentText(order)}</dd>
           </div>
         </dl>
+
+        {riderActive(order.lalamove_status) && order.lalamove_share_link && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4 text-sm">
+            <div>
+              <p className="font-bold">Lalamove delivery</p>
+              <p className="text-muted">{riderStatusText(order.lalamove_status)}</p>
+            </div>
+            <a href={order.lalamove_share_link} target="_blank" rel="noreferrer" className="btn-secondary btn-small">
+              Track your rider
+            </a>
+          </div>
+        )}
       </section>
 
       <div className="mt-8 flex flex-wrap justify-center gap-3">

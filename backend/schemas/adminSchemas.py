@@ -13,6 +13,24 @@ class AdminOrderOut(OrderOut):
     user_id: Optional[int]
     notes: Optional[str]
     updated_at: datetime
+    ship_lat: Optional[float] = None
+    ship_lng: Optional[float] = None
+    lalamove_order_id: Optional[str] = None
+    lalamove_fee: Optional[float] = None
+    lalamove_driver_id: Optional[str] = None
+
+
+class RiderInfo(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    plate_number: Optional[str] = None
+
+
+class AdminOrderWithRider(BaseModel):
+    """An order plus its Lalamove rider (when Lalamove shares the rider's details)."""
+
+    order: AdminOrderOut
+    rider: Optional[RiderInfo] = None
 
 
 class OrderUpdate(BaseModel):

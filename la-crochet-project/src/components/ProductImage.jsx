@@ -1,8 +1,13 @@
 import { useState } from "react";
+import { API_BASE_URL } from "../api/config";
 import { YarnIcon } from "./Icons";
 
 // A product photo. Until real photos are uploaded (or if one fails to load),
 // it shows a soft tile with a yarn ball instead of a broken image.
+// Photos uploaded in the back office are kept by the backend ("/uploads/..."),
+// so those addresses get the backend's address in front.
+export const photoUrl = (src) => (src?.startsWith("/uploads/") ? `${API_BASE_URL}${src}` : src);
+
 export default function ProductImage({ src, alt, className = "", dimmed = false, iconClassName = "h-10 w-10" }) {
   const [failed, setFailed] = useState(false);
 
@@ -22,7 +27,7 @@ export default function ProductImage({ src, alt, className = "", dimmed = false,
 
   return (
     <img
-      src={src}
+      src={photoUrl(src)}
       alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}

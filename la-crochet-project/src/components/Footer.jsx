@@ -27,7 +27,8 @@ const footerGroups = [
 
 export default function Footer() {
   return (
-    <footer className="mt-16">
+    <footer className="night mt-16">
+      {/* "night": stays dark brown in both light and dark mode (see index.css) */}
       {/* The crochet trim along the top of the Footer */}
       <div className="scallop-up" aria-hidden="true" />
 

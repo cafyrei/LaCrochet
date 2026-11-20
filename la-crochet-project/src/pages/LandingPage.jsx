@@ -51,7 +51,7 @@ export default function LandingPage() {
 
         {/* Arched frame, like a window display */}
         <div className="relative mx-auto w-full max-w-md">
-          <div className="aspect-[4/5] overflow-hidden rounded-t-full rounded-b-3xl border-8 border-card bg-sand shadow-xl shadow-ink/10">
+          <div className="aspect-[4/5] overflow-hidden rounded-t-full rounded-b-3xl border-8 border-card bg-sand shadow-xl shadow-shade/10">
             <img
               src={heroYarn}
               alt="Skeins of yarn in warm and bright colours"

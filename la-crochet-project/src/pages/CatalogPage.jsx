@@ -227,12 +227,12 @@ function CategoryChip({ label, count, active, onClick }) {
       aria-pressed={active}
       className={`shrink-0 cursor-pointer whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
         active
-          ? "border-berry bg-berry text-white"
+          ? "border-berry bg-berry text-on-berry"
           : "border-line bg-card text-ink hover:border-berry hover:text-berry"
       }`}
     >
       {label}
-      {count != null && <span className={active ? "ml-1.5 text-white/75" : "ml-1.5 text-muted"}>{count}</span>}
+      {count != null && <span className={active ? "ml-1.5 text-on-berry/75" : "ml-1.5 text-muted"}>{count}</span>}
     </button>
   );
 }

@@ -54,9 +54,10 @@ export default function ProductPage() {
   async function handleBuyNow() {
     setCartMessage(null);
     setBusy(true);
-    const result = await addToCart(product, quantity);
+    const result = await addToCart(product, quantity, { quiet: true });
     setBusy(false);
-    if (result.ok) navigate("/checkout");
+    // Check out just this product; anything else in the cart stays for later.
+    if (result.ok) navigate(`/checkout?item=${productId}`);
     else if (result.error) setCartMessage({ ok: false, text: result.error });
   }
 

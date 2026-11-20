@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   addCartItem,
   emptyCart,
@@ -7,10 +7,31 @@ import {
   setCartItemQuantity,
 } from "../api/cart";
 import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
+import { canOrder } from "../utils/cart";
 
 const CartContext = createContext(null);
 const OLD_STORAGE_KEY = "lacrochet-cart"; // carts used to live in the browser
 const EMPTY_CART = { items: [], count: 0, subtotal: 0 };
+// Remembers which cart items the customer UNticked, per account, so new items
+// start ticked and their choice survives a page refresh.
+const unselectedKey = (userId) => `lacrochet-cart-unselected-${userId}`;
+
+function loadUnselected(userId) {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(unselectedKey(userId))) ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveUnselected(userId, ids) {
+  try {
+    localStorage.setItem(unselectedKey(userId), JSON.stringify([...ids]));
+  } catch {
+    // Storage blocked: the choice just won't survive a refresh.
+  }
+}
 
 function getProductId(product) {
   return product?.id ?? product?.product_id ?? product?.productId;
@@ -35,7 +56,11 @@ function toCart(data) {
 
 export function CartProvider({ children }) {
   const { user, token, requestLogin } = useAuth();
+  const { toast } = useToast();
   const [cart, setCart] = useState(EMPTY_CART);
+  const userId = user?.user_id ?? null;
+  const [unselected, setUnselected] = useState(() => (userId ? loadUnselected(userId) : new Set()));
+  const [unselectedFor, setUnselectedFor] = useState(userId);
   const [isLoading, setIsLoading] = useState(false);
   const [cartError, setCartError] = useState("");
 
@@ -56,6 +81,12 @@ export function CartProvider({ children }) {
     setCartError("");
   }, []);
 
+  // Each account remembers its own ticks: switch to theirs when someone logs in or out.
+  if (userId !== unselectedFor) {
+    setUnselectedFor(userId);
+    setUnselected(userId ? loadUnselected(userId) : new Set());
+  }
+
   // Load the logged-in customer's cart (and finish a pending "Add to Cart").
   // Logged out → empty cart.
   useEffect(() => {
@@ -70,11 +101,17 @@ export function CartProvider({ children }) {
 
     setIsLoading(true);
     const load = pending
-      ? addCartItem(token, pending.productId, pending.quantity).catch((error) => {
-          // Couldn't add it (e.g. sold out): still show their cart, plus why.
-          if (!ignore) setCartError(error.message);
-          return getCart(token);
-        })
+      ? addCartItem(token, pending.productId, pending.quantity)
+          .then((data) => {
+            toast({ message: "Added to your cart", action: { label: "View cart", to: "/cart" } });
+            return data;
+          })
+          .catch((error) => {
+            // Couldn't add it (e.g. sold out): still show their cart, plus why.
+            if (!ignore) setCartError(error.message);
+            toast({ message: error.message, tone: "error" });
+            return getCart(token);
+          })
       : getCart(token);
 
     load
@@ -91,7 +128,7 @@ export function CartProvider({ children }) {
     return () => {
       ignore = true;
     };
-  }, [user, token]);
+  }, [user, token, toast]); // toast never changes, so this still runs only on login/logout
 
   const refreshCart = useCallback(async () => {
     if (!token) return;
@@ -104,7 +141,8 @@ export function CartProvider({ children }) {
 
   // Returns { ok: true } if added. Guests get the login popup instead,
   // and the item is added right after they log in.
-  async function addToCart(product, quantity = 1) {
+  // quiet: no "Added to your cart" message (e.g. Buy now goes straight to checkout).
+  async function addToCart(product, quantity = 1, { quiet = false } = {}) {
     const productId = getProductId(product);
     const amount = Math.max(1, Math.floor(Number(quantity) || 1));
 
@@ -117,6 +155,7 @@ export function CartProvider({ children }) {
 
     try {
       applyCart(await addCartItem(token, productId, amount));
+      if (!quiet) toast({ message: "Added to your cart", action: { label: "View cart", to: "/cart" } });
       return { ok: true };
     } catch (error) {
       return { ok: false, error: error.message };
@@ -136,13 +175,66 @@ export function CartProvider({ children }) {
     }
   }
 
+  // Removes a line, with an "Undo" button in the message that puts it back.
   async function removeFromCart(productId) {
+    const item = cart.items.find((line) => line.id === productId);
     try {
       applyCart(await removeCartItem(token, productId));
+      if (item) {
+        toast({
+          message: `Removed ${item.name}`,
+          tone: "info",
+          action: {
+            label: "Undo",
+            onClick: () =>
+              addCartItem(token, productId, item.quantity)
+                .then(applyCart)
+                .catch((error) => toast({ message: error.message, tone: "error" })),
+          },
+        });
+      }
     } catch (error) {
       setCartError(error.message);
     }
   }
+
+  // ---- Choosing what to check out ----
+  const updateUnselected = useCallback(
+    (change) => {
+      setUnselected((current) => {
+        const next = change(new Set(current));
+        if (user) saveUnselected(user.user_id, next);
+        return next;
+      });
+    },
+    [user]
+  );
+
+  const isSelected = (productId) => !unselected.has(productId);
+
+  function toggleSelected(productId) {
+    updateUnselected((ids) => {
+      if (ids.has(productId)) ids.delete(productId);
+      else ids.add(productId);
+      return ids;
+    });
+  }
+
+  // Tick (true) or untick (false) every item that can be ordered.
+  function selectAll(selected) {
+    updateUnselected((ids) => {
+      cart.items.filter(canOrder).forEach((item) => (selected ? ids.delete(item.id) : ids.add(item.id)));
+      return ids;
+    });
+  }
+
+  // The lines going to checkout: ticked, still on sale and in stock.
+  const selectedItems = useMemo(
+    () => cart.items.filter((item) => canOrder(item) && !unselected.has(item.id)),
+    [cart.items, unselected]
+  );
+  const selectedCount = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedSubtotal = selectedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   async function clearCart() {
     if (!token) {
@@ -162,6 +254,12 @@ export function CartProvider({ children }) {
         cartItems: cart.items,
         cartCount: cart.count,
         subtotal: cart.subtotal,
+        selectedItems,
+        selectedCount,
+        selectedSubtotal,
+        isSelected,
+        toggleSelected,
+        selectAll,
         isLoading,
         cartError,
         addToCart,

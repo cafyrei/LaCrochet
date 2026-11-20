@@ -12,6 +12,13 @@ class OrderItemIn(BaseModel):
     quantity: int = Field(ge=1, le=99)
 
 
+class MapPin(BaseModel):
+    """A spot on the map. The bounds are roughly the Philippines."""
+
+    lat: float = Field(ge=4.0, le=21.5)
+    lng: float = Field(ge=116.0, le=127.5)
+
+
 class OrderCreate(BaseModel):
     items: list[OrderItemIn] = Field(min_length=1, max_length=50)
     customer_name: _text(200)
@@ -20,6 +27,7 @@ class OrderCreate(BaseModel):
     shipping_method: Literal["delivery", "pickup"]
     payment_method: Literal["cod", "online"]
     shipping_address: Optional[ShippingAddressIn] = None
+    delivery_location: Optional[MapPin] = None    # the customer's pin, for Lalamove
 
     @field_validator("email")
     @classmethod
@@ -43,6 +51,7 @@ class OrderCreate(BaseModel):
             raise ValueError("Please enter a delivery address.")
         if self.shipping_method == "pickup":
             self.shipping_address = None  # pickup orders don't store an address
+            self.delivery_location = None
         return self
 
 
@@ -83,6 +92,8 @@ class OrderOut(BaseModel):
     total: float
     created_at: datetime
     items: list[OrderItemOut]
+    lalamove_status: Optional[str] = None
+    lalamove_share_link: Optional[str] = None   # "Track your rider" link
 
 
 class MyOrderOut(OrderOut):

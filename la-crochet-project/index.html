@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="La Crochet: handmade crochet pieces and yarn from the Philippines." />
     <meta name="theme-color" content="#FBF7F2" />
+    <!-- Light and dark mode. The line below applies a saved choice from the
+         sun/moon button before the page draws, so it never flashes the wrong colours. -->
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        document.querySelector('meta[name="color-scheme"]').content =
+          localStorage.getItem("color-scheme") ?? "light dark";
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/src/assets/La Crochet Ico.svg" />
 
     <!-- Body font: Nunito Sans (headings use Lora, stored in the project) -->

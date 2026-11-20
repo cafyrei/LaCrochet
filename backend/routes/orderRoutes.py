@@ -8,18 +8,21 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from payrex import Client as PayrexClient
 from sqlalchemy.orm import Session
 
+import lalamove_client as lalamove
 from auth import get_current_user
 from database import get_db
+from models.addressModel import Address
 from models.orderModel import Order, OrderItem
 from models.productModel import Product
 from models.userModel import User
-from routes.cartRoutes import clear_cart
+from routes.cartRoutes import remove_ordered_items
+from routes.deliveryRoutes import address_text
 from schemas.orderSchemas import MyOrderOut, OrderCreate, OrderCreated, OrderOut
 
 router = APIRouter()
 log = logging.getLogger("uvicorn.error")  # shows up in the backend terminal
 
-# Keep in sync with DELIVERY_FEE in CheckoutPage.jsx and Cart.jsx.
+# Flat delivery fee, only used while Lalamove isn't set up in .env.
 DELIVERY_FEE = Decimal("90.00")
 PAYREX_METHODS = ["gcash", "card", "maya", "qrph"]
 ORDER_NOT_FOUND = "Order not found."
@@ -106,13 +109,71 @@ def mark_paid(db: Session, order: Order) -> bool:
     if order.order_status == "pending":
         order.order_status = "processing"  # ready for the owner to prepare
         if order.user_id is not None:
-            clear_cart(db, order.user_id)  # paid: empty their cart
+            # paid: take the ordered items out of their cart (unticked ones stay)
+            remove_ordered_items(db, order.user_id, [item.product_id for item in order.items])
     elif order.order_status == "cancelled":
         # Rare: the money arrived after the order was cancelled (and restocked).
         # Leave a note so the owner sees it in the back office and can refund or restore it.
         note = "Paid online after this order was cancelled. Refund it in PayRex or restore the order."
         order.notes = f"{order.notes}\n{note}" if order.notes else note
     return True
+
+
+def _delivery_fee(payload: OrderCreate) -> Decimal:
+    """The real Lalamove price to the customer's pin (or the flat fee if Lalamove isn't set up)."""
+    if payload.shipping_method != "delivery":
+        return Decimal("0")
+    if not lalamove.is_configured():
+        return DELIVERY_FEE
+    if payload.delivery_location is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Please drop a pin on the map so the rider can find you."
+        )
+    try:
+        price = lalamove.quote(
+            payload.delivery_location.lat,
+            payload.delivery_location.lng,
+            address_text(payload.shipping_address),
+        )
+    except lalamove.LalamoveError as exc:
+        log.warning("Lalamove price check failed at checkout: %s (%s)", exc, exc.code)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST if exc.code else status.HTTP_502_BAD_GATEWAY,
+            f"{exc} You can choose store pickup instead.",
+        )
+    return price["fee"]
+
+
+def _remember_pin(db: Session, user: User, payload: OrderCreate) -> None:
+    """Save the map pin with the customer's address, so checkout has it ready next time."""
+    address, pin = payload.shipping_address, payload.delivery_location
+    if address is None or pin is None:
+        return
+    saved = (
+        db.query(Address)
+        .filter(Address.user_id == user.user_id)
+        .order_by(Address.is_default.desc(), Address.updated_at.desc())
+        .first()
+    )
+    if saved is None:
+        db.add(
+            Address(
+                user_id=user.user_id,
+                recipient_name=payload.customer_name,
+                phone=payload.phone,
+                street=address.street,
+                barangay=address.barangay,
+                city=address.city,
+                province=address.province,
+                postal_code=address.postal_code,
+                country=address.country,
+                lat=pin.lat,
+                lng=pin.lng,
+                is_default=True,
+            )
+        )
+    elif (saved.street, saved.city, saved.postal_code) == (address.street, address.city, address.postal_code):
+        saved.lat, saved.lng = pin.lat, pin.lng  # same address: just remember the pin
 
 
 def _cancel_and_restock(db: Session, order: Order) -> None:
@@ -134,6 +195,9 @@ def create_order(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),  # must be logged in
 ):
+    # Ask Lalamove first, before holding any stock (it can take a few seconds).
+    shipping_fee = _delivery_fee(payload)
+
     # Same product added twice? Add the quantities together.
     quantities: dict[int, int] = {}
     for item in payload.items:
@@ -170,8 +234,8 @@ def create_order(
         (Decimal(products_by_id[pid].price) * qty for pid, qty in quantities.items()),
         Decimal("0"),
     )
-    shipping_fee = DELIVERY_FEE if payload.shipping_method == "delivery" else Decimal("0")
     address = payload.shipping_address
+    pin = payload.delivery_location
 
     order = Order(
         user_id=user.user_id,
@@ -185,6 +249,8 @@ def create_order(
         ship_province=address.province if address else None,
         ship_postal_code=address.postal_code if address else None,
         ship_country=address.country if address else None,
+        ship_lat=pin.lat if pin else None,
+        ship_lng=pin.lng if pin else None,
         payment_method=payload.payment_method,
         subtotal=subtotal,
         shipping_fee=shipping_fee,
@@ -204,6 +270,7 @@ def create_order(
         product.stock_qty -= quantity  # reserve the stock
 
     db.add(order)
+    _remember_pin(db, user, payload)
     db.flush()  # the database fills in order_number and access_token here
 
     checkout_url = None
@@ -264,8 +331,9 @@ def create_order(
         order.payrex_checkout_session_id = session.id
         checkout_url = session.url
     else:
-        # Cash on delivery / pay at pickup: the order is placed, so empty the cart.
-        clear_cart(db, user.user_id)
+        # Cash on delivery / pay at pickup: the order is placed, so take the
+        # ordered items out of the cart. Items they didn't tick stay for later.
+        remove_ordered_items(db, user.user_id, quantities.keys())
 
     db.commit()
 

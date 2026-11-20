@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { BagIcon, CloseIcon, MenuIcon, SearchIcon, UserIcon } from "./Icons";
+import ThemeToggle from "./ThemeToggle";
 
 const NAV_LINKS = [
   { label: "Home", to: "/" },
@@ -22,6 +23,15 @@ export default function Navbar({ onLoginClick }) {
   const { cartCount } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // The Navbar stays on screen between pages now, so close its menus on every page change.
+  const [lastPath, setLastPath] = useState(pathname);
+  if (pathname !== lastPath) {
+    setLastPath(pathname);
+    setMenuOpen(false);
+    setSearchOpen(false);
+  }
 
   return (
     <header className="sticky top-0 z-50">
@@ -55,6 +65,8 @@ export default function Navbar({ onLoginClick }) {
               <SearchIcon />
             </button>
 
+            <ThemeToggle className="btn-quiet px-2.5" />
+
             {/* Only logged-in customers have a cart. */}
             {user && (
               <Link
@@ -64,7 +76,11 @@ export default function Navbar({ onLoginClick }) {
               >
                 <BagIcon />
                 {cartCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-berry px-1 text-[11px] font-bold text-white">
+                  // key: a new number replays the little "pop", so people notice the change
+                  <span
+                    key={cartCount}
+                    className="badge-pop absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-berry px-1 text-[11px] font-bold text-on-berry"
+                  >
                     {cartCount}
                   </span>
                 )}
@@ -98,7 +114,7 @@ export default function Navbar({ onLoginClick }) {
         {searchOpen && <SearchBar onClose={() => setSearchOpen(false)} />}
 
         {menuOpen && (
-          <ul id="mobile-menu" className="border-t border-line px-4 py-3 md:hidden">
+          <ul id="mobile-menu" className="slide-down border-t border-line px-4 py-3 md:hidden">
             {NAV_LINKS.map((link) => (
               <li key={link.to}>
                 <NavLink
@@ -145,7 +161,7 @@ function SearchBar({ onClose }) {
     <form
       role="search"
       onSubmit={handleSubmit}
-      className="border-t border-line px-4 py-4 sm:px-6"
+      className="slide-down border-t border-line px-4 py-4 sm:px-6"
       onKeyDown={(event) => event.key === "Escape" && onClose()}
     >
       <div className="relative mx-auto flex max-w-2xl items-center">
@@ -204,7 +220,7 @@ function AccountMenu({ user, onLogout }) {
       {open && (
         <div
           role="menu"
-          className="card absolute right-0 top-full z-50 mt-2 w-60 p-2 shadow-lg shadow-ink/10"
+          className="pop-in card absolute right-0 top-full z-50 mt-2 w-60 origin-top-right p-2 shadow-lg shadow-shade/10"
         >
           <p className="truncate px-3 py-2 text-sm text-muted">{user.email}</p>
           <Link

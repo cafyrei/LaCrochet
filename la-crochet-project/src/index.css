@@ -6,20 +6,135 @@
    Change a colour here and it changes everywhere on the site.
    ===================================================================== */
 @theme {
+  /* Light-mode values. In dark mode these are swapped further down
+     (see "Light and dark mode"), so every bg-cream, text-ink, etc. follows along. */
   --color-cream: #fbf7f2;        /* page background */
   --color-sand: #f3ece4;         /* soft panels, hovers */
   --color-card: #ffffff;         /* cards, Navbar */
   --color-berry: #9f1d35;        /* buttons, links, prices */
   --color-berry-dark: #7a1428;   /* button hover */
+  --color-on-berry: #ffffff;     /* text sitting on berry */
   --color-terracotta: #e8b4a0;   /* small highlights */
   --color-blush: #f7e4dc;        /* light terracotta tint */
-  --color-ink: #3b2a24;          /* main text, Footer */
-  --color-muted: #8a776e;        /* quieter text */
+  --color-ink: #3b2a24;          /* main text */
+  --color-muted: #76645b;        /* quieter text */
   --color-line: #eadfd6;         /* borders */
+  --color-shade: #3b2a24;        /* shadows and the dim layer behind pop-ups */
+  --color-success: #2f5d33;      /* "Paid", success messages */
+  --color-success-bg: #eef6ec;
+  --color-success-line: #cfe3cc;
 
   --font-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Lora", Georgia, serif;
   --font-lora: "Lora", Georgia, serif; /* older pages use font-lora */
+}
+
+/* =====================================================================
+   Light and dark mode
+   The site follows the device's setting. The sun/moon button can pin
+   light or dark for this browser; it does that by changing
+   <meta name="color-scheme"> in index.html, and these rules follow it.
+   ===================================================================== */
+:root {
+  color-scheme: light dark;
+
+  &:has(> head > meta[name="color-scheme"][content="dark"]) {
+    color-scheme: dark;
+  }
+  &:has(> head > meta[name="color-scheme"][content="light"]) {
+    color-scheme: light;
+  }
+
+  /* The two palettes, side by side. */
+  --light-cream: #fbf7f2;      --dark-cream: #1c1512;
+  --light-sand: #f3ece4;       --dark-sand: #2e231e;
+  --light-card: #ffffff;       --dark-card: #251c18;
+  --light-berry: #9f1d35;      --dark-berry: #ec7f97;
+  --light-berry-dark: #7a1428; --dark-berry-dark: #f6a9bb;
+  --light-on-berry: #ffffff;   --dark-on-berry: #2a0d16;
+  --light-terracotta: #e8b4a0; --dark-terracotta: #e8b4a0;
+  --light-blush: #f7e4dc;      --dark-blush: #3b2129;
+  --light-ink: #3b2a24;        --dark-ink: #f3e9e1;
+  --light-muted: #76645b;      --dark-muted: #b8a79d;
+  --light-line: #eadfd6;       --dark-line: #3d2f29;
+  --light-shade: #3b2a24;      --dark-shade: #000000;
+  --light-success: #2f5d33;    --dark-success: #9fd49a;
+  --light-success-bg: #eef6ec; --dark-success-bg: #18261a;
+  --light-success-line: #cfe3cc; --dark-success-line: #2c4a2e;
+
+  /* Always-dark panels (Footer, back-office menu, login side panel, messages):
+     dark brown in light mode, near-black in dark mode. */
+  --night-bg: #3b2a24;
+  --night-text: #fbf7f2;
+
+  /* Order status labels (Preparing, On the way, Completed). */
+  --amber-bg: #fbecd0;  --amber-text: #7a5212;
+  --blue-bg: #e6eef6;   --blue-text: #2f4e70;
+  --green-bg: #e5f0e2;  --green-text: #2f5d33;
+}
+
+/* Browsers without light-dark(): follow the device's dark setting only. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-cream: var(--dark-cream);
+    --color-sand: var(--dark-sand);
+    --color-card: var(--dark-card);
+    --color-berry: var(--dark-berry);
+    --color-berry-dark: var(--dark-berry-dark);
+    --color-on-berry: var(--dark-on-berry);
+    --color-terracotta: var(--dark-terracotta);
+    --color-blush: var(--dark-blush);
+    --color-ink: var(--dark-ink);
+    --color-muted: var(--dark-muted);
+    --color-line: var(--dark-line);
+    --color-shade: var(--dark-shade);
+    --color-success: var(--dark-success);
+    --color-success-bg: var(--dark-success-bg);
+    --color-success-line: var(--dark-success-line);
+    --night-bg: #120c0a;
+    --night-text: #f3e9e1;
+    --amber-bg: #3a2c12;  --amber-text: #f2cf8a;
+    --blue-bg: #1b2a3a;   --blue-text: #a9c8ea;
+    --green-bg: #1c2e1d;  --green-text: #a6d7a1;
+  }
+}
+
+/* Modern browsers: each colour picks its light or dark value from color-scheme,
+   so the sun/moon button works too. */
+@supports (color: light-dark(white, black)) {
+  :root {
+    --color-cream: light-dark(var(--light-cream), var(--dark-cream));
+    --color-sand: light-dark(var(--light-sand), var(--dark-sand));
+    --color-card: light-dark(var(--light-card), var(--dark-card));
+    --color-berry: light-dark(var(--light-berry), var(--dark-berry));
+    --color-berry-dark: light-dark(var(--light-berry-dark), var(--dark-berry-dark));
+    --color-on-berry: light-dark(var(--light-on-berry), var(--dark-on-berry));
+    --color-terracotta: light-dark(var(--light-terracotta), var(--dark-terracotta));
+    --color-blush: light-dark(var(--light-blush), var(--dark-blush));
+    --color-ink: light-dark(var(--light-ink), var(--dark-ink));
+    --color-muted: light-dark(var(--light-muted), var(--dark-muted));
+    --color-line: light-dark(var(--light-line), var(--dark-line));
+    --color-shade: light-dark(var(--light-shade), var(--dark-shade));
+    --color-success: light-dark(var(--light-success), var(--dark-success));
+    --color-success-bg: light-dark(var(--light-success-bg), var(--dark-success-bg));
+    --color-success-line: light-dark(var(--light-success-line), var(--dark-success-line));
+    --night-bg: light-dark(#3b2a24, #120c0a);
+    --night-text: light-dark(#fbf7f2, #f3e9e1);
+    --amber-bg: light-dark(#fbecd0, #3a2c12);  --amber-text: light-dark(#7a5212, #f2cf8a);
+    --blue-bg: light-dark(#e6eef6, #1b2a3a);   --blue-text: light-dark(#2f4e70, #a9c8ea);
+    --green-bg: light-dark(#e5f0e2, #1c2e1d);  --green-text: light-dark(#2f5d33, #a6d7a1);
+  }
+}
+
+.status-amber { background-color: var(--amber-bg); color: var(--amber-text); }
+.status-blue  { background-color: var(--blue-bg);  color: var(--blue-text); }
+.status-green { background-color: var(--green-bg); color: var(--green-text); }
+
+/* Inside an always-dark panel, "ink" is the panel and "cream" is its text,
+   so classes like bg-ink and text-cream keep working there in both modes. */
+.night {
+  --color-ink: var(--night-bg);
+  --color-cream: var(--night-text);
 }
 
 @layer base {
@@ -64,10 +179,10 @@
 @layer components {
   /* ---- Buttons ---- */
   .btn-primary {
-    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-berry px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-berry-dark disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-berry px-6 py-3 text-sm font-bold text-on-berry transition-colors hover:bg-berry-dark disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn-secondary {
-    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-berry bg-transparent px-6 py-3 text-sm font-bold text-berry transition-colors hover:bg-berry hover:text-white disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-berry bg-transparent px-6 py-3 text-sm font-bold text-berry transition-colors hover:bg-berry hover:text-on-berry disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn-quiet {
     @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-sand;
@@ -83,7 +198,7 @@
     @apply mb-1.5 block text-sm font-semibold text-ink;
   }
   .input {
-    @apply w-full rounded-xl border border-line bg-white px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-muted/70 focus:border-berry focus:ring-2 focus:ring-berry/15;
+    @apply w-full rounded-xl border border-line bg-card px-4 py-2.5 text-sm text-ink transition outline-none placeholder:text-muted/70 focus:border-berry focus:ring-2 focus:ring-berry/15;
   }
   .checkbox {
     @apply h-4 w-4 shrink-0 cursor-pointer accent-berry;
@@ -102,7 +217,7 @@
     @apply rounded-xl border border-berry/20 bg-blush px-4 py-3 text-sm text-berry-dark;
   }
   .alert-success {
-    @apply rounded-xl border border-[#cfe3cc] bg-[#eef6ec] px-4 py-3 text-sm text-[#2f5d33];
+    @apply rounded-xl border border-success-line bg-success-bg px-4 py-3 text-sm text-success;
   }
 
   /* ---- The crochet edge ----
@@ -166,15 +281,42 @@
     color: var(--color-ink);
     overflow: hidden;
     box-shadow: 0 30px 80px -20px rgb(59 42 36 / 0.45);
+
+    /* Fades and rises in when opened, and fades out when closed. "display" and
+       "overlay" are in the list so it stays visible (and on top) while fading out. */
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    transition-property: opacity, transform, display, overlay;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
+    transition-behavior: allow-discrete;
   }
   /* Only set a layout when it's open, so closed stays hidden. */
   .auth-dialog[open] {
     display: flex;
-    animation: auth-pop 180ms ease-out;
+    opacity: 1;
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
   }
   .auth-dialog::backdrop {
+    background: rgb(59 42 36 / 0);
+    backdrop-filter: blur(0);
+    transition-property: background-color, backdrop-filter, display, overlay;
+    transition-duration: 200ms;
+    transition-behavior: allow-discrete;
+  }
+  .auth-dialog[open]::backdrop {
     background: rgb(59 42 36 / 0.45);
     backdrop-filter: blur(3px);
+
+    @starting-style {
+      background: rgb(59 42 36 / 0);
+      backdrop-filter: blur(0);
+    }
   }
 
   /* Stop the page behind from scrolling while the popup is open. */
@@ -189,24 +331,497 @@
     overscroll-behavior: contain;
   }
 
-  /* Field errors appear only after someone has finished with a field
-     (or pressed the button), never while they're still typing. */
-  .auth-dialog .field-error {
+  /* Field errors (login popup and the Contact form) appear only after someone
+     has finished with a field (or pressed the button), never while they're still typing. */
+  :is(.auth-dialog, .checked-form) .field-error {
     display: none;
     @apply mt-1.5 items-start gap-1.5 text-xs font-semibold text-berry;
   }
-  .auth-dialog .field:has(:user-invalid) .field-error {
+  :is(.auth-dialog, .checked-form) .field:has(:user-invalid) .field-error {
     display: flex;
   }
-  .auth-dialog .input:user-invalid {
+  :is(.auth-dialog, .checked-form) .input:user-invalid {
     border-color: var(--color-berry);
-    background-color: #fdf4f1;
+    background-color: var(--color-blush);
   }
 }
 
-@keyframes auth-pop {
+
+/* Delivery map pin (checkout): a berry teardrop with a cream dot. */
+.map-pin {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin-top: 0;
+  border-radius: 50% 50% 50% 0;
+  background: var(--color-berry);
+  border: 3px solid #fff;
+  box-shadow: 0 4px 10px rgb(59 42 36 / 0.35);
+  transform: rotate(-45deg);
+  transform-origin: center;
+  position: relative;
+  top: 2px;
+}
+.map-pin::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-cream);
+}
+
+/* ---- Chat helper (Yarnie) ---- */
+@layer components {
+  .chat-launcher {
+    @apply fixed right-4 bottom-4 z-40 inline-flex h-14 min-w-14 cursor-pointer items-center justify-center gap-2 rounded-full bg-berry px-4 font-bold text-on-berry shadow-lg shadow-shade/25 transition-colors hover:bg-berry-dark sm:right-6 sm:bottom-6 sm:px-5;
+  }
+  .chat-panel {
+    @apply fixed inset-x-2 bottom-20 z-40 flex max-h-[min(36rem,calc(100dvh-7rem))] flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl shadow-shade/20 sm:inset-x-auto sm:right-6 sm:bottom-24 sm:w-[24rem];
+    animation: chat-in 160ms ease-out;
+  }
+  .chat-header-btn {
+    @apply cursor-pointer rounded-full px-3 py-1.5 text-sm font-semibold text-on-berry/90 transition-colors hover:bg-on-berry/15 hover:text-on-berry;
+  }
+  .chat-log {
+    @apply flex min-h-48 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain bg-cream px-4 py-4;
+  }
+  .chat-bubble {
+    @apply max-w-[85%] space-y-2 rounded-2xl px-3.5 py-2.5 text-[0.95rem] leading-6 break-words;
+  }
+  .chat-bubble-bot {
+    @apply self-start rounded-bl-md bg-card text-ink ring-1 ring-line;
+  }
+  .chat-bubble-me {
+    @apply self-end rounded-br-md bg-berry text-on-berry whitespace-pre-wrap;
+  }
+  .chat-input {
+    @apply max-h-32 min-h-11 flex-1 resize-none rounded-2xl border border-line bg-cream px-3.5 py-2.5 text-[0.95rem] leading-6 text-ink placeholder:text-muted focus:border-berry focus:outline-none;
+    field-sizing: content; /* grows with the text, where supported */
+  }
+}
+
+/* Show the newest message first when the panel opens (Chrome/Edge);
+   other browsers get the same result from the code in ChatWidget. */
+.chat-latest {
+  scroll-initial-target: nearest;
+}
+
+/* "Yarnie is typing" dots. */
+.chat-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 6px 2px;
+}
+.chat-typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-muted);
+  animation: chat-dot 1s infinite ease-in-out;
+}
+.chat-typing span:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chat-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-panel, .chat-typing span { animation: none; }
+}
+
+/* ==== Smooth moves between pages and states ==== */
+
+/* Each page (and back-office section) fades up gently when it opens. */
+.page-enter {
+  /* "backwards", not "both": nothing stays applied after it ends, so pop-ups
+     inside the page (position: fixed) are never thrown off. */
+  animation: page-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+@keyframes page-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(6px);
+  }
+}
+
+/* Menus that open: the phone menu and search bar slide down, the account menu pops. */
+.slide-down {
+  transition: opacity 180ms ease-out, translate 180ms ease-out;
+  @starting-style {
+    opacity: 0;
+    translate: 0 -6px;
+  }
+}
+.pop-in {
+  transition: opacity 150ms ease-out, scale 150ms ease-out;
+  @starting-style {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+/* The cart number gives a little hop when it changes. */
+.badge-pop {
+  animation: badge-pop 320ms ease-out;
+}
+@keyframes badge-pop {
+  40% {
+    transform: scale(1.35);
+  }
+}
+
+/* The big tick after placing an order. */
+.success-pop {
+  animation: success-pop 480ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+}
+@keyframes success-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* Buttons sink slightly when pressed, so taps feel answered. */
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.btn-quiet:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* Cart lines: new ones fade in, removed ones fold away, unticked ones look paused. */
+.cart-line {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 220ms ease, opacity 200ms ease;
+  @starting-style {
+    opacity: 0;
+  }
+}
+.cart-line > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.cart-line[data-leaving] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.cart-line[data-unselected] img,
+.cart-line[data-unselected] h2,
+.cart-line[data-unselected] .tabular-nums {
+  opacity: 0.55;
+  transition: opacity 150ms ease;
+}
+
+/* Grey "loading" shapes with a soft shimmer. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-sand) 0%,
+    color-mix(in oklab, var(--color-sand), var(--color-card)) 50%,
+    var(--color-sand) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* "Skip to content": hidden until a keyboard user tabs to it. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 60;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  font-weight: 700;
+  font-size: 0.875rem;
+  translate: 0 -200%;
+}
+.skip-link:focus {
+  translate: 0;
+}
+
+/* ==== Messages (toasts) ==== */
+/* The corner is a "popover", so it sits above everything, even the login popup. */
+.toast-region {
+  position: fixed;
+  inset: auto;
+  /* Bottom-left, clear of the chat button in the bottom-right corner.
+     Phones: a full-width strip just above the chat button. */
+  bottom: 5.5rem;
+  left: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  width: calc(100% - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none; /* only the messages themselves catch clicks */
+  z-index: 70; /* older browsers without popover support */
+}
+@media (min-width: 640px) {
+  .toast-region {
+    bottom: 1.5rem;
+    left: 1.5rem;
+    width: 24rem;
+  }
+}
+/* The back office has no chat button but a menu on the left: use the bottom-right there. */
+@media (min-width: 1024px) {
+  body:has(#admin-menu) .toast-region {
+    left: auto;
+    right: 1.5rem;
+  }
+}
+/* Browsers with popover support hide it while there are no messages. */
+.toast-region[popover]:not(:popover-open) {
+  display: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.7rem 0.7rem 0.85rem;
+  border-radius: 1rem;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.45);
+  outline: 1px solid rgb(255 255 255 / 0.08); /* keeps its edge visible on a dark page */
+  transition: opacity 200ms ease-out, translate 200ms ease-out;
+  @starting-style {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+.toast[data-leaving] {
+  opacity: 0;
+  translate: 0 10px;
+}
+.toast-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--color-berry);
+  color: var(--color-on-berry);
+}
+.toast[data-tone="info"] .toast-icon {
+  background: rgb(255 255 255 / 0.15);
+}
+.toast[data-tone="error"] .toast-icon {
+  background: var(--color-terracotta);
+  color: var(--color-ink);
+}
+.toast-action {
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.toast-action:hover {
+  background: #fff;
+}
+.toast-close {
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 0.4rem;
+  color: rgb(251 247 242 / 0.7);
+}
+.toast-close:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: var(--color-cream);
+}
+
+/* People who asked their device for less motion get plain fades, no sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .badge-pop,
+  .success-pop,
+  .skeleton {
+    animation: none;
+  }
+  .slide-down,
+  .toast,
+  .toast[data-leaving] {
+    translate: none;
+    @starting-style {
+      translate: none;
+    }
+  }
+  .pop-in {
+    @starting-style {
+      scale: 1;
+    }
+  }
+}
+
+/* A box robots fill in but people never see (Contact form spam trap). */
+.trap-field {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ==== Light / dark mode button ==== */
+/* Both icons are in the page; show the one for the mode you'd switch TO. */
+.theme-toggle .theme-when-dark {
+  display: none;
+}
+.theme-toggle :is(.theme-when-light, .theme-when-dark) {
+  align-items: center;
+  gap: 0.75rem;
+}
+.theme-toggle .theme-when-light {
+  display: inline-flex;
+}
+/* Pinned to dark with the button… */
+:root:has(> head > meta[name="color-scheme"][content="dark"]) .theme-toggle {
+  .theme-when-light {
+    display: none;
+  }
+  .theme-when-dark {
+    display: inline-flex;
+  }
+}
+/* …or following a device that's in dark mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not(:has(> head > meta[name="color-scheme"][content="light"])) .theme-toggle {
+    .theme-when-light {
+      display: none;
+    }
+    .theme-when-dark {
+      display: inline-flex;
+    }
+  }
+}
+/* The icon spins in when it changes. */
+.theme-toggle .theme-icon {
+  transition: rotate 450ms cubic-bezier(0.3, 1.3, 0.5, 1), scale 450ms cubic-bezier(0.3, 1.3, 0.5, 1),
+    opacity 250ms ease;
+  @starting-style {
+    rotate: -90deg;
+    scale: 0.4;
+    opacity: 0;
+  }
+}
+
+/* Switching modes: the new colours spread out in a circle from the button. */
+html[data-theme-switch]::view-transition-old(root),
+html[data-theme-switch]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-theme-switch]::view-transition-new(root) {
+  animation: theme-reveal 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-x, 50%) var(--theme-y, 0));
+  }
+  to {
+    clip-path: circle(var(--theme-r, 150vmax) at var(--theme-x, 50%) var(--theme-y, 0));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .theme-toggle .theme-icon {
+    @starting-style {
+      rotate: 0deg;
+      scale: 1;
+    }
+  }
+}
+
+/* ---- Help page FAQ (native <details>, so Ctrl+F still finds closed answers) ---- */
+@layer components {
+  .faq-item {
+    border-top: 1px solid var(--color-line);
+  }
+  .faq-item:last-child {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .faq-item > summary {
+    list-style: none; /* hide the default triangle */
+    display: flex;
+    align-items: center;
+    gap: 0.6ch;
+    padding-block: 0.85rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    cursor: pointer;
+    border-radius: 0.5rem;
+  }
+  .faq-item > summary::-webkit-details-marker {
+    display: none;
+  }
+  /* Chevron right before the question, so it's easy to scan down the list */
+  .faq-item > summary::before {
+    content: "";
+    inline-size: 1em;
+    block-size: 1em;
+    flex-shrink: 0;
+    background-color: var(--color-berry);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat center / contain;
+    rotate: -90deg; /* closed: points to the side */
+  }
+  .faq-item[open] > summary::before {
+    rotate: 0deg; /* open: points down */
+  }
+  .faq-item > summary:hover {
+    color: var(--color-berry);
+  }
+  .faq-answer {
+    padding-bottom: 1rem;
+    padding-left: calc(1em + 0.6ch); /* lines up with the question text */
+    color: color-mix(in srgb, var(--color-ink) 85%, transparent);
+    line-height: 1.7;
+  }
+  /* Smooth open/close where the browser supports it; instant elsewhere */
+  .faq-item::details-content {
+    interpolate-size: allow-keywords;
+    overflow: clip;
+    contain: layout;
+  }
+  .faq-item:not([open])::details-content {
+    block-size: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .faq-item > summary::before {
+      transition: rotate 0.2s;
+    }
+    .faq-item::details-content {
+      transition: block-size 0.3s ease-in-out, content-visibility 0.3s allow-discrete;
+    }
   }
 }

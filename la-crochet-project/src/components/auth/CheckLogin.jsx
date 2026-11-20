@@ -71,7 +71,7 @@ export default function CheckLogin({ showLogin, setShowLogin, reason }) {
           </button>
 
           {/* Left: who we are and why an account helps */}
-          <aside className="relative flex shrink-0 items-center gap-3 bg-ink px-6 py-4 text-cream md:w-72 md:flex-col md:items-start md:justify-between md:px-8 md:py-10">
+          <aside className="night relative flex shrink-0 items-center gap-3 bg-ink px-6 py-4 text-cream md:w-72 md:flex-col md:items-start md:justify-between md:px-8 md:py-10">
             <div className="scallop-right absolute inset-y-0 -right-2.5 hidden md:block" aria-hidden="true" />
             <div className="flex items-center gap-3 md:block">
               <YarnIcon className="h-8 w-8 text-terracotta md:h-12 md:w-12" />

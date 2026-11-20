@@ -8,6 +8,7 @@ async function request(path, token, options = {}) {
       headers: {
         Authorization: `Bearer ${token}`,
         ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
       },
     });
   } catch {
@@ -50,6 +51,25 @@ export const createProduct = (token, product) =>
 export const updateProduct = (token, productId, changes) =>
   request(`/products/${productId}`, token, { method: "PATCH", body: JSON.stringify(changes) });
 
+// Sends the photo file itself. Resolves with { image_url: "/uploads/products/..." }.
+export const uploadProductPhoto = (token, file) =>
+  request("/uploads/product-photo", token, {
+    method: "POST",
+    body: file,
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+  });
+
+// ---- Lalamove riders ----
+// Each answers { order, rider } (rider: { name, phone, plate_number } once Lalamove shares it).
+export const bookRider = (token, orderNumber) =>
+  request(`/orders/${encodeURIComponent(orderNumber)}/lalamove`, token, { method: "POST" });
+
+export const refreshRider = (token, orderNumber) =>
+  request(`/orders/${encodeURIComponent(orderNumber)}/lalamove/refresh`, token, { method: "POST" });
+
+export const cancelRider = (token, orderNumber) =>
+  request(`/orders/${encodeURIComponent(orderNumber)}/lalamove`, token, { method: "DELETE" });
+
 // ---- Back office ----
 export const getCounts = (token) => request("/counts", token);
 export const getDashboard = (token) => request("/dashboard", token);
@@ -75,3 +95,9 @@ export const getSubscribers = (token) => request("/newsletter", token);
 
 export const unsubscribe = (token, subscriberId) =>
   request(`/newsletter/${subscriberId}`, token, { method: "DELETE" });
+
+// ---- Messages from the Contact page ----
+export const getMessages = (token) => request("/messages", token);
+
+export const setMessageStatus = (token, messageId, status) =>
+  request(`/messages/${messageId}`, token, { method: "PATCH", body: JSON.stringify({ status }) });

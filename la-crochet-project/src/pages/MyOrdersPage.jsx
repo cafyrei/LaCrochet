@@ -6,6 +6,7 @@ import PageLayout from "../components/PageLayout";
 import { useAuth } from "../context/AuthContext";
 import { formatDate, formatPrice } from "../utils/format";
 import { ORDER_TABS, orderStatus, orderTab, paymentText } from "../utils/orderStatus";
+import { riderActive, riderStatusText } from "../utils/riderStatus";
 
 // What to say when a tab has no orders.
 const EMPTY_TAB_TEXT = {
@@ -93,13 +94,13 @@ export default function MyOrdersPage() {
                     onClick={() => chooseTab(tab.id)}
                     className={`shrink-0 cursor-pointer whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
                       selected
-                        ? "border-berry bg-berry text-white"
+                        ? "border-berry bg-berry text-on-berry"
                         : "border-line bg-card text-ink hover:border-berry hover:text-berry"
                     }`}
                   >
                     {tab.label}
                     {count > 0 && (
-                      <span className={selected ? "ml-1.5 text-white/75" : "ml-1.5 text-muted"}>
+                      <span className={selected ? "ml-1.5 text-on-berry/75" : "ml-1.5 text-muted"}>
                         {count}
                       </span>
                     )}
@@ -160,12 +161,28 @@ function OrderCard({ order }) {
         <div className="text-muted">
           <p>{order.shipping_method === "delivery" ? "Home delivery" : "Store pickup"}</p>
           <p>{paymentText(order)}</p>
+          {riderActive(order.lalamove_status) && order.lalamove_share_link && (
+            <p>
+              {riderStatusText(order.lalamove_status)}.{" "}
+              <a href={order.lalamove_share_link} target="_blank" rel="noreferrer" className="link">
+                Track your rider
+              </a>
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-base font-bold">{formatPrice(order.total)}</p>
-          <Link to={detailsLink} className="link">
-            View order
-          </Link>
+          <p className="flex justify-end gap-3">
+            <Link
+              to={`/contact?${new URLSearchParams({ topic: "order", order: order.order_number })}`}
+              className="text-muted hover:text-ink"
+            >
+              Ask about it
+            </Link>
+            <Link to={detailsLink} className="link">
+              View order
+            </Link>
+          </p>
         </div>
       </div>
     </li>

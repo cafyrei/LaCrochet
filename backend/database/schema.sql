@@ -55,6 +55,8 @@ create table addresses (
   province        varchar(100) not null,
   postal_code     varchar(10)  not null check (postal_code ~ '^\d{4}$'),
   country         varchar(100) not null default 'Philippines',
+  lat             numeric(9, 6),   -- map pin, remembered for next checkout
+  lng             numeric(9, 6),
   is_default      boolean      not null default false,
   created_at      timestamptz  not null default now(),
   updated_at      timestamptz  not null default now()
@@ -154,6 +156,8 @@ create table orders (
   ship_province     varchar(100),
   ship_postal_code  varchar(10),
   ship_country      varchar(100) default 'Philippines',
+  ship_lat          numeric(9, 6),   -- customer's map pin (Lalamove needs it)
+  ship_lng          numeric(9, 6),
 
   -- Payment
   payment_method    varchar(20)  not null check (payment_method in ('cod', 'online')),
@@ -171,6 +175,10 @@ create table orders (
   -- Outside services
   payrex_checkout_session_id  varchar(100) unique,
   lalamove_order_id           varchar(100),
+  lalamove_status             varchar(30),    -- ASSIGNING_DRIVER, ON_GOING, PICKED_UP, COMPLETED, ...
+  lalamove_share_link         varchar(500),   -- live tracking page for the customer
+  lalamove_fee                numeric(10, 2), -- what Lalamove charged when the rider was booked
+  lalamove_driver_id          varchar(50),
 
   notes             text,
   created_at        timestamptz not null default now(),
@@ -218,6 +226,24 @@ create table newsletter_subscribers (
 
 
 -- ---------------------------------------------------------------------
+-- Contact page messages (also in migrations/004_contact_messages.sql)
+-- ---------------------------------------------------------------------
+create table if not exists contact_messages (
+  message_id    serial       primary key,
+  user_id       integer      references users (user_id) on delete set null,  -- null = guest
+  name          varchar(200) not null,
+  email         varchar(255) not null,
+  phone         varchar(20),
+  topic         varchar(20)  not null check (topic in ('order', 'custom', 'product', 'other')),
+  order_number  varchar(20),
+  message       text         not null check (char_length(message) between 1 and 2000),
+  status        varchar(10)  not null default 'new' check (status in ('new', 'read', 'replied')),
+  created_at    timestamptz  not null default now()
+);
+
+create index if not exists contact_messages_status_idx on contact_messages (status, created_at desc);
+
+-- ---------------------------------------------------------------------
 -- Auto-update updated_at
 -- ---------------------------------------------------------------------
 create trigger users_set_updated_at     before update on users     for each row execute function set_updated_at();
@@ -241,3 +267,4 @@ alter table cart_items             enable row level security;
 alter table orders                 enable row level security;
 alter table order_items            enable row level security;
 alter table newsletter_subscribers enable row level security;
+alter table contact_messages       enable row level security;

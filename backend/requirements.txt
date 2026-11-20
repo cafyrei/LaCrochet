@@ -6,4 +6,5 @@ psycopg[binary]>=3.1
 python-dotenv
 PyJWT
 payrex-python
-lalamove-sdk
+requests
+google-genai

@@ -170,3 +170,72 @@ export const AlertIcon = (props) => (
     <path d="M12 7.5v5.5M12 16.5h.01" />
   </Icon>
 );
+
+// ---- Chat helper ----
+export const ChatIcon = (props) => (
+  <Icon {...props}>
+    <path d="M20 11.5c0 4.1-3.6 7.5-8 7.5-1.1 0-2.1-.2-3-.5L4 20l1.4-3.8C4.5 14.9 4 13.3 4 11.5 4 7.4 7.6 4 12 4s8 3.4 8 7.5Z" />
+    <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" />
+  </Icon>
+);
+
+export const SendIcon = (props) => (
+  <Icon {...props}>
+    <path d="M4 12 20 4l-6 16-2.5-6.5L4 12Z" />
+    <path d="m11.5 13.5 4-4" />
+  </Icon>
+);
+
+// ---- About and Contact ----
+export const PhoneIcon = (props) => (
+  <Icon {...props}>
+    <path d="M6.5 3.5h3l1.5 4-2 1.3a11 11 0 0 0 6.2 6.2l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z" />
+  </Icon>
+);
+
+export const PinIcon = (props) => (
+  <Icon {...props}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z" />
+    <circle cx="12" cy="10" r="2.3" />
+  </Icon>
+);
+
+export const ClockIcon = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Icon>
+);
+
+export const HeartIcon = (props) => (
+  <Icon {...props}>
+    <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20Z" />
+  </Icon>
+);
+
+export const GiftIcon = (props) => (
+  <Icon {...props}>
+    <rect x="4" y="9" width="16" height="11" rx="1.5" />
+    <path d="M3.5 9h17M12 9v11M12 9S10.5 4.5 8 4.5a2 2 0 0 0 0 4.5M12 9s1.5-4.5 4-4.5a2 2 0 0 1 0 4.5" />
+  </Icon>
+);
+
+export const HandIcon = (props) => (
+  <Icon {...props}>
+    <path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11m0-5.5V5a1.5 1.5 0 0 1 3 0v6m0-4.5a1.5 1.5 0 0 1 3 0V13a7 7 0 0 1-7 7h-.7a6 6 0 0 1-4.6-2.2L3.5 15a1.5 1.5 0 0 1 2.3-1.9L8 15.5" />
+  </Icon>
+);
+
+// ---- Light / dark mode ----
+export const SunIcon = (props) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+  </Icon>
+);
+
+export const MoonIcon = (props) => (
+  <Icon {...props}>
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
+  </Icon>
+);

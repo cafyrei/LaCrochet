@@ -3,15 +3,9 @@ import { createRoot } from "react-dom/client";
 import Router from "./Router";
 import "./index.css";
 
-import { AuthProvider } from "./context/AuthContext";
-import { CartProvider } from "./context/CartContext";
-
+// The login, cart and message providers are set up inside Router.jsx.
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <AuthProvider>
-      <CartProvider>
-        <Router />
-      </CartProvider>
-    </AuthProvider>
+    <Router />
   </StrictMode>,
 );

@@ -2,10 +2,10 @@
 
 export const ORDER_STATUS = {
   pending: { label: "Order placed", className: "bg-blush text-berry-dark" },
-  processing: { label: "Preparing", className: "bg-[#fbecd0] text-[#7a5212]" },
-  ready_for_pickup: { label: "Ready for pickup", className: "bg-[#e6eef6] text-[#2f4e70]" },
-  shipped: { label: "On the way", className: "bg-[#e6eef6] text-[#2f4e70]" },
-  completed: { label: "Completed", className: "bg-[#e5f0e2] text-[#2f5d33]" },
+  processing: { label: "Preparing", className: "status-amber" },
+  ready_for_pickup: { label: "Ready for pickup", className: "status-blue" },
+  shipped: { label: "On the way", className: "status-blue" },
+  completed: { label: "Completed", className: "status-green" },
   cancelled: { label: "Cancelled", className: "bg-sand text-muted" },
 };
 

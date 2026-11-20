@@ -30,6 +30,8 @@ class Order(Base):
     ship_province = Column(String(100))
     ship_postal_code = Column(String(10))
     ship_country = Column(String(100), server_default="Philippines")
+    ship_lat = Column(Numeric(9, 6))   # customer's map pin, for Lalamove
+    ship_lng = Column(Numeric(9, 6))
 
     payment_method = Column(String(20), nullable=False)  # cod | online
     payment_status = Column(String(20), nullable=False, server_default="unpaid")
@@ -41,6 +43,10 @@ class Order(Base):
 
     payrex_checkout_session_id = Column(String(100), unique=True)
     lalamove_order_id = Column(String(100))
+    lalamove_status = Column(String(30))
+    lalamove_share_link = Column(String(500))
+    lalamove_fee = Column(Numeric(10, 2))
+    lalamove_driver_id = Column(String(50))
 
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

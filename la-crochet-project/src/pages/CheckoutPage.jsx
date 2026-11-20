@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { getDeliveryInfo, getDeliveryQuote } from "../api/delivery";
 import { cancelOrder, createOrder, PENDING_ORDER_KEY } from "../api/orders";
 import LoginRequired from "../components/auth/LoginRequired";
+import LocationPicker from "../components/checkout/LocationPicker";
 import { ChevronLeftIcon } from "../components/Icons";
 import PageLayout from "../components/PageLayout";
 import ProductImage from "../components/ProductImage";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { canOrder } from "../utils/cart";
+import CheckoutSteps from "../components/checkout/CheckoutSteps";
 import { formatPrice } from "../utils/format";
 
-// Keep in sync with DELIVERY_FEE in backend/routes/orderRoutes.py.
-const DELIVERY_FEE = 90;
+// Used only if the server can't be asked (it normally tells us the fee).
+const FALLBACK_DELIVERY_FEE = 90;
+const QUOTE_DELAY_MS = 700; // wait until they stop moving the pin before asking Lalamove
 
 const emptyForm = {
   fullName: "",
@@ -30,11 +35,21 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  // Lalamove: is it set up, the customer's map pin, and the live delivery price.
+  const [delivery, setDelivery] = useState({ lalamove: false, flat_fee: FALLBACK_DELIVERY_FEE, shop: null });
+  const [pin, setPin] = useState(null);
+  const [quote, setQuote] = useState({ status: "idle" }); // idle | loading | ok | error
 
-  const { cartItems: allCartItems, subtotal } = useCart();
-  // Items that are hidden or sold out stay in the cart but can't be ordered.
-  const cartItems = allCartItems.filter((item) => item.available);
-  const { user, token } = useAuth();
+  const { cartItems: allCartItems, selectedItems, isLoading: cartLoading } = useCart();
+  const [searchParams] = useSearchParams();
+  // "Buy now" on a product page sends ?item=<id>: check out just that one.
+  // Otherwise: the items ticked in the cart (unticked ones stay for later).
+  const buyNowId = Number(searchParams.get("item")) || null;
+  const cartItems = buyNowId
+    ? allCartItems.filter((item) => item.id === buyNowId && canOrder(item))
+    : selectedItems;
+  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const { user, token, isChecking } = useAuth();
 
   // Logged in? Fill in their details (only boxes that are still empty).
   useEffect(() => {
@@ -53,10 +68,48 @@ export default function CheckoutPage() {
         postalCode: fill("postalCode", address?.postal_code),
       };
     });
+    // Their saved map pin, from last time.
+    if (address?.lat != null && address?.lng != null) {
+      setPin((current) => current ?? { lat: address.lat, lng: address.lng });
+    }
   }, [user]);
 
+  useEffect(() => {
+    getDeliveryInfo()
+      .then(setDelivery)
+      .catch(() => {}); // keep the flat fee
+  }, []);
+
+  const addressComplete =
+    form.street.trim() && form.barangay.trim() && form.city.trim() && form.province.trim() && /^\d{4}$/.test(form.postalCode);
+  const needsQuote = delivery.lalamove && shippingMethod === "delivery";
+
+  // Ask Lalamove for the price once the pin and address are in (and again when they change).
+  useEffect(() => {
+    if (!needsQuote || !pin || !addressComplete || !token) {
+      setQuote({ status: "idle" });
+      return;
+    }
+    let stale = false;
+    setQuote({ status: "loading" });
+    const timer = setTimeout(() => {
+      getDeliveryQuote(token, pin, {
+        street: form.street,
+        barangay: form.barangay,
+        city: form.city,
+        province: form.province,
+        postal_code: form.postalCode,
+      })
+        .then((result) => !stale && setQuote({ status: "ok", fee: result.fee, distanceKm: result.distance_km }))
+        .catch((error) => !stale && setQuote({ status: "error", message: error.message }));
+    }, QUOTE_DELAY_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [needsQuote, pin, addressComplete, token, form.street, form.barangay, form.city, form.province, form.postalCode]);
+
   // PayRex sends people back to /checkout?payment=cancelled&order=...&token=...
-  const [searchParams] = useSearchParams();
   const paymentCancelled = searchParams.get("payment") === "cancelled";
   const cancelledOrder = searchParams.get("order");
   const cancelledToken = searchParams.get("token");
@@ -74,8 +127,18 @@ export default function CheckoutPage() {
     });
   }, [paymentCancelled, cancelledOrder, cancelledToken]);
 
-  const shippingFee = shippingMethod === "delivery" ? DELIVERY_FEE : 0;
-  const grandTotal = subtotal + shippingFee;
+  // null = not known yet (no pin, or Lalamove is still answering)
+  const shippingFee =
+    shippingMethod === "pickup"
+      ? 0
+      : delivery.lalamove
+        ? quote.status === "ok"
+          ? quote.fee
+          : null
+        : (delivery.flat_fee ?? FALLBACK_DELIVERY_FEE);
+  const grandTotal = subtotal + (shippingFee ?? 0);
+  const waitingForFee = shippingMethod === "delivery" && shippingFee === null;
+  const addressForMap = [form.street, form.barangay, form.city, form.province].filter((part) => part.trim()).join(", ");
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -87,7 +150,15 @@ export default function CheckoutPage() {
     setSubmitError("");
 
     if (cartItems.length === 0) {
-      setSubmitError("Your cart is empty. Add products before checking out.");
+      setSubmitError("Choose at least one item in your cart before checking out.");
+      return;
+    }
+    if (needsQuote && !pin) {
+      setSubmitError("Please drop a pin on the map so the rider can find you.");
+      return;
+    }
+    if (waitingForFee) {
+      setSubmitError(quote.status === "error" ? quote.message : "Please wait for the delivery fee.");
       return;
     }
 
@@ -113,6 +184,7 @@ export default function CheckoutPage() {
                   postal_code: form.postalCode,
                 }
               : null,
+          delivery_location: shippingMethod === "delivery" && pin ? pin : null,
         },
         token
       );
@@ -139,7 +211,8 @@ export default function CheckoutPage() {
 
   return (
     <PageLayout width="wide">
-      <Link to="/cart" className="inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
+      <CheckoutSteps current="details" />
+      <Link to="/cart" className="mt-6 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
         <ChevronLeftIcon className="h-4 w-4" />
         Back to cart
       </Link>
@@ -155,12 +228,27 @@ export default function CheckoutPage() {
       <div className="mt-8">
         {!user ? (
           <LoginRequired title="Log in to check out" message="You need an account to place an order." />
+        ) : cartItems.length === 0 && (cartLoading || isChecking) ? (
+          <p className="py-16 text-center text-muted">Loading your items…</p>
         ) : cartItems.length === 0 ? (
           <div className="card px-6 py-14 text-center">
-            <h2 className="text-2xl font-semibold">Your cart is empty</h2>
-            <Link to="/catalog" className="btn-primary mt-6">
-              Start shopping
-            </Link>
+            {allCartItems.length === 0 ? (
+              <>
+                <h2 className="text-2xl font-semibold">Your cart is empty</h2>
+                <p className="mt-2 text-muted">Add something you love, then come back here.</p>
+                <Link to="/catalog" className="btn-primary mt-6">
+                  Start shopping
+                </Link>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-semibold">No items chosen</h2>
+                <p className="mt-2 text-muted">Tick the items you want to buy in your cart first.</p>
+                <Link to="/cart" className="btn-primary mt-6">
+                  Choose items
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
@@ -190,7 +278,11 @@ export default function CheckoutPage() {
                     checked={shippingMethod === "delivery"}
                     onChange={() => setShippingMethod("delivery")}
                     title="Home delivery"
-                    detail={formatPrice(DELIVERY_FEE)}
+                    detail={
+                      delivery.lalamove
+                        ? "Lalamove rider. Fee depends on distance."
+                        : formatPrice(delivery.flat_fee ?? FALLBACK_DELIVERY_FEE)
+                    }
                   />
                   <Choice
                     name="shipping"
@@ -238,6 +330,20 @@ export default function CheckoutPage() {
                       value={form.postalCode}
                       onChange={updateField}
                     />
+                    {delivery.lalamove && (
+                      <div className="sm:col-span-2">
+                        <p className="label">Pin your exact location</p>
+                        <p className="-mt-1 mb-3 text-xs text-muted">
+                          The Lalamove rider follows this pin, and the delivery fee is based on it.
+                        </p>
+                        <LocationPicker
+                          value={pin}
+                          onChange={setPin}
+                          start={delivery.shop}
+                          addressText={addressForMap}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </Section>
@@ -263,7 +369,14 @@ export default function CheckoutPage() {
             </div>
 
             <aside className="card p-6 lg:sticky lg:top-28">
-              <h2 className="text-xl font-semibold">Your order</h2>
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-xl font-semibold">Your order</h2>
+                {!buyNowId && (
+                  <Link to="/cart" className="link text-sm">
+                    Change items
+                  </Link>
+                )}
+              </div>
 
               <ul className="mt-4 space-y-4">
                 {cartItems.map((item) => (
@@ -288,10 +401,28 @@ export default function CheckoutPage() {
                   <dt className="text-muted">Subtotal</dt>
                   <dd>{formatPrice(subtotal)}</dd>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted">Shipping</dt>
-                  <dd>{shippingMethod === "pickup" ? "Free" : formatPrice(shippingFee)}</dd>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">
+                    Shipping
+                    {shippingMethod === "delivery" && quote.status === "ok" && quote.distanceKm && (
+                      <span className="block text-xs">Lalamove, {quote.distanceKm} km</span>
+                    )}
+                  </dt>
+                  <dd className="text-right">
+                    {shippingMethod === "pickup"
+                      ? "Free"
+                      : shippingFee !== null
+                        ? formatPrice(shippingFee)
+                        : quote.status === "loading"
+                          ? "Checking…"
+                          : quote.status === "error"
+                            ? "Unavailable"
+                            : "Drop your pin"}
+                  </dd>
                 </div>
+                {shippingMethod === "delivery" && quote.status === "error" && (
+                  <p className="text-xs text-berry">{quote.message}</p>
+                )}
                 <div className="flex justify-between border-t border-line pt-3 text-base font-bold">
                   <dt>Total</dt>
                   <dd>{formatPrice(grandTotal)}</dd>
@@ -304,8 +435,12 @@ export default function CheckoutPage() {
                 </p>
               )}
 
-              <button type="submit" disabled={isSubmitting} className="btn-primary mt-6 w-full">
-                {isSubmitting
+              <button type="submit" disabled={isSubmitting || waitingForFee} className="btn-primary mt-6 w-full">
+                {waitingForFee && !isSubmitting
+                  ? quote.status === "loading"
+                    ? "Checking the delivery fee…"
+                    : "Pin your location to continue"
+                  : isSubmitting
                   ? paymentMethod === "online"
                     ? "Opening PayRex…"
                     : "Placing your order…"

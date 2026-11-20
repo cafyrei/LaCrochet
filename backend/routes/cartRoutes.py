@@ -93,8 +93,20 @@ def _check_stock(product: Product, quantity: int) -> None:
 
 
 def clear_cart(db: Session, user_id: int) -> None:
-    """Empty a customer's cart (used after an order goes through)."""
+    """Empty a customer's whole cart (the "Empty cart" button)."""
     db.query(CartItem).filter(CartItem.user_id == user_id).delete()
+
+
+def remove_ordered_items(db: Session, user_id: int, product_ids) -> None:
+    """After an order goes through, take only the ordered products out of the cart.
+
+    Customers can tick which cart items to buy, so the unticked ones stay for later.
+    """
+    product_ids = [pid for pid in product_ids if pid is not None]
+    if product_ids:
+        db.query(CartItem).filter(
+            CartItem.user_id == user_id, CartItem.product_id.in_(product_ids)
+        ).delete(synchronize_session=False)
 
 
 @router.get("/cart", response_model=CartOut)

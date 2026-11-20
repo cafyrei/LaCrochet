@@ -186,7 +186,7 @@ function SubscriberRow({ subscriber, onUpdated }) {
               type="button"
               disabled={busy}
               onClick={remove}
-              className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-white hover:bg-berry-dark"
+              className="cursor-pointer rounded-full bg-berry px-3 py-1.5 text-xs font-bold text-on-berry hover:bg-berry-dark"
             >
               Unsubscribe
             </button>

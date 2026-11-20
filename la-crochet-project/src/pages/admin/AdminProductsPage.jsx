@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router";
-import { createProduct, getAllProducts, updateProduct } from "../../api/admin";
+import { createProduct, getAllProducts, updateProduct, uploadProductPhoto } from "../../api/admin";
 import { getCategories } from "../../api/products";
 import AdminPageHeader, { LoadError } from "../../components/admin/AdminPageHeader";
 import Toggle from "../../components/admin/Toggle";
 import { CloseIcon, PlusIcon, SearchIcon } from "../../components/Icons";
 import ProductImage from "../../components/ProductImage";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { formatPrice } from "../../utils/format";
 
 const LOW_STOCK = 5;
@@ -23,6 +24,7 @@ const VIEWS = [
 
 export default function AdminProductsPage() {
   const { token } = useAuth();
+  const { toast } = useToast();
   const { refreshCounts } = useOutletContext();
   const [params, setParams] = useSearchParams();
   const view = VIEWS.find((item) => item.id === params.get("show")) ?? VIEWS[0];
@@ -58,6 +60,8 @@ export default function AdminProductsPage() {
   }
 
   function saved(product) {
+    const isNew = !products?.some((item) => item.product_id === product.product_id);
+    toast(isNew ? `Added ${product.name} to the shop` : `Saved ${product.name}`);
     setProducts((current) => {
       const exists = current.some((item) => item.product_id === product.product_id);
       return exists
@@ -273,6 +277,7 @@ function ProductForm({ product, categories, token, onClose, onSaved }) {
     is_featured: product?.is_featured ?? false,
   });
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -314,8 +319,11 @@ function ProductForm({ product, categories, token, onClose, onSaved }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="product-form-title"
-      className="fixed inset-0 z-[100] flex justify-center overflow-y-auto bg-ink/40 p-4 sm:p-8"
+      className="fixed inset-0 z-[100] flex justify-center overflow-y-auto bg-shade/40 p-4 sm:p-8"
       onClick={(event) => event.target === event.currentTarget && onClose()}
+      // A photo dropped next to the box shouldn't open in the tab and lose the form.
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => event.preventDefault()}
     >
       <form onSubmit={handleSubmit} className="card relative my-auto w-full max-w-xl space-y-5 p-6 shadow-xl sm:p-8">
         <button
@@ -370,21 +378,13 @@ function ProductForm({ product, categories, token, onClose, onSaved }) {
           </div>
         </div>
 
-        <div>
-          <label htmlFor="pf-image" className="label">Photo address</label>
-          <input
-            id="pf-image"
-            name="image_url"
-            maxLength={500}
-            placeholder="/images/products/daisy-tote.jpg"
-            value={form.image_url}
-            onChange={update}
-            className="input"
-          />
-          <p className="mt-1 text-xs text-muted">
-            Put the photo in la-crochet-project/public/images/products and type its address here.
-          </p>
-        </div>
+        <PhotoField
+          token={token}
+          value={form.image_url}
+          name={form.name}
+          onChange={(image_url) => setForm((current) => ({ ...current, image_url }))}
+          onBusyChange={setUploading}
+        />
 
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-3 text-sm font-semibold">
@@ -415,11 +415,146 @@ function ProductForm({ product, categories, token, onClose, onSaved }) {
           <button type="button" onClick={onClose} className="btn-quiet">
             Cancel
           </button>
-          <button type="submit" disabled={busy} className="btn-primary">
-            {busy ? "Saving…" : product ? "Save changes" : "Add product"}
+          <button type="submit" disabled={busy || uploading} className="btn-primary">
+            {busy ? "Saving…" : uploading ? "Uploading photo…" : product ? "Save changes" : "Add product"}
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+const MAX_PHOTO_MB = 5;
+
+// The product photo: drag a photo onto the box, click "Choose a photo", or paste one.
+// The photo uploads straight away and the product keeps its new address.
+function PhotoField({ token, value, name, onChange, onBusyChange }) {
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const inputRef = useRef(null);
+
+  async function upload(file) {
+    setError("");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("That file isn't a photo. Please use a JPG, PNG, WebP or GIF.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+      setError(`That photo is over ${MAX_PHOTO_MB} MB. Please use a smaller one.`);
+      return;
+    }
+    setUploading(true);
+    onBusyChange(true);
+    setStatus("Uploading photo…");
+    try {
+      const { image_url } = await uploadProductPhoto(token, file);
+      onChange(image_url);
+      setStatus("Photo uploaded.");
+    } catch (err) {
+      setError(err.message);
+      setStatus("");
+    } finally {
+      setUploading(false);
+      onBusyChange(false);
+      if (inputRef.current) inputRef.current.value = ""; // lets the same file be picked again
+    }
+  }
+
+  function handleDrop(event) {
+    event.preventDefault();
+    setDragging(false);
+    upload(event.dataTransfer.files?.[0]);
+  }
+
+  function handlePaste(event) {
+    const file = [...(event.clipboardData?.files ?? [])].find((item) => item.type.startsWith("image/"));
+    if (file) {
+      event.preventDefault();
+      upload(file);
+    }
+  }
+
+  return (
+    <div>
+      <span className="label" id="pf-photo-label">Photo</span>
+      <div
+        role="group"
+        aria-labelledby="pf-photo-label"
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault(); // needed, or the browser opens the photo instead of dropping it here
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setDragging(false);
+        }}
+        onDrop={handleDrop}
+        onPaste={handlePaste}
+        className={`flex items-center gap-4 rounded-2xl border-2 border-dashed p-4 transition-colors ${
+          dragging ? "border-berry bg-blush/60" : "border-line bg-sand/40"
+        }`}
+      >
+        <ProductImage
+          key={value}
+          src={value}
+          alt={value ? `Photo of ${name || "this product"}` : "No photo yet"}
+          className="h-24 w-24 shrink-0 rounded-xl"
+        />
+        <div className="min-w-0 space-y-2 text-sm">
+          <p className="text-ink">
+            {dragging ? "Drop the photo here" : "Drag a photo here, paste one, or"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <label htmlFor="pf-photo-file" className={`btn-secondary btn-small cursor-pointer ${uploading ? "pointer-events-none opacity-60" : ""}`}>
+              {value ? "Change photo" : "Choose a photo"}
+            </label>
+            <input
+              ref={inputRef}
+              id="pf-photo-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              disabled={uploading}
+              onChange={(event) => upload(event.target.files?.[0])}
+              className="sr-only"
+            />
+            {value && !uploading && (
+              <button type="button" onClick={() => onChange("")} className="btn-quiet btn-small">
+                Remove photo
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-muted">JPG, PNG, WebP or GIF, up to {MAX_PHOTO_MB} MB.</p>
+        </div>
+      </div>
+
+      <p aria-live="polite" className={status && !error ? "mt-1 text-xs text-muted" : "sr-only"}>
+        {status}
+      </p>
+      {error && (
+        <p role="alert" className="mt-1 text-xs font-semibold text-berry">
+          {error}
+        </p>
+      )}
+
+      <details className="mt-2 text-xs text-muted">
+        <summary className="cursor-pointer">Or type a photo address</summary>
+        <input
+          id="pf-image"
+          name="image_url"
+          aria-label="Photo address"
+          maxLength={500}
+          placeholder="/images/products/daisy-tote.jpg"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="input mt-2"
+        />
+      </details>
     </div>
   );
 }
