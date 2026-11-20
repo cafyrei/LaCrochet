@@ -51,4 +51,5 @@ async def upload_product_photo(request: Request, _: User = Depends(get_admin_use
     PRODUCT_PHOTOS.mkdir(parents=True, exist_ok=True)
     name = f"{uuid.uuid4().hex}.{kind}"   # random name: no clashes, nothing guessable from the original
     (PRODUCT_PHOTOS / name).write_bytes(data)
+    print(f"/uploads/products/{name}")
     return {"image_url": f"/uploads/products/{name}"}
