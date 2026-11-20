@@ -142,7 +142,7 @@ export default function AboutPage() {
         </figure>
         <div>
           <h2 id="team" className="font-serif text-3xl font-semibold">
-            The people behind the website
+            The SolarBoys
           </h2>
           <p className="mt-4 text-lg leading-8 text-ink/85">
             The shop you're browsing was designed and built by our team of student developers, from
